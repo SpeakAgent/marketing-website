@@ -1,0 +1,114 @@
+
+.home {
+    background-color: $primary-color;
+    .site-inner {
+        background: #f8d338;
+        @include media('>phone-landscape'){
+            background-image: url('/wp-content/themes/speak-agent/images/bground-home.png');
+            background-size: 200%;
+            background-repeat: repeat-x;
+            background-position: center bottom;
+        }
+        @include media('>=tablet'){
+            background-size: 150%;
+        }
+        @include media('>tablet-small-landscape'){
+            padding: 30px 0;
+            background-size: 90%;
+        }
+    }
+    .col-left {
+        background-image: url('/wp-content/themes/speak-agent/images/bground-glow.png');
+        background-size: 100%;
+        background-repeat: no-repeat;
+        padding-bottom: 24px;
+        @include media('>phone-landscape'){
+            padding-bottom: 0;
+        }
+    }
+    .form-container {
+        @extend .has-drop-shadow;
+        background-color: #fff;
+        border-top: 1px solid $primary-color;
+        padding: 20px;
+        @include media('>phone-landscape'){
+            border: 1px solid $primary-color;
+            max-width: 85%;
+        }
+        @extend .is-centered;
+        form {
+            text-align: left;
+        }
+    }
+
+    .brand-promo {
+        @extend .is-centered;
+        h1 {
+            @extend .is-centered;
+            @extend .is-flush-bottom;
+            max-width: 420px;
+            padding: 0 24px;
+            @include media('>tablet'){
+                padding: 0;
+            }
+        }
+        .brand-tagline {
+            font-weight: normal;
+            em {
+                font-weight: 900;
+                font-style: normal;
+            }
+        }
+    }
+
+
+    .cta-learner {
+        @extend .is-centered;
+        p {
+            @extend .is-flush-bottom;
+        }
+    }
+    .cta-invite {
+        @extend .is-centered;
+        h2 {
+            @extend .is-flush-bottom;
+            margin-bottom: 4px;
+        }
+        p {
+            margin-bottom: 12px;
+        }
+
+    }
+    .cta-accept-invite {
+        border-top: 1px solid $primary-color;
+        margin-top: 24px;
+        padding-top: 16px;
+        @extend .is-centered;
+        span.fa-stack {
+            display: block;
+            margin: 0 auto;
+            text-align: center;
+            @include media('>=tablet-landscape'){
+                display: inline-block;
+            }
+        }
+    }
+
+    .sub-footer {
+        padding-top: 24px;
+        padding-bottom: 12px;
+        @extend .is-centered;
+        @include rem('font-size', 18px);
+        @include media('>phone-landscape'){
+            @include rem('font-size', 24px);
+        }
+        p {
+            @extend .is-flush-bottom;
+        }
+        a {
+            color: #fff;
+            font-weight: bold;
+        }
+    }
+
+}
