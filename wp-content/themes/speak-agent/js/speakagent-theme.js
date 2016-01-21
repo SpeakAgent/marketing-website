@@ -49,13 +49,27 @@
         });
 
         $("form#request-invite").submit(function(event){
+            // This prevents a redirect because it was driving
+            // me nuts. Feel free to remove. -KC
             event.preventDefault();
+
+            // Sending the actual invite
             var $inputs = $('form#request-invite :input');
-            $.post( "http://127.0.0.1:8000/invite/request/",
+            $.post( "https://lexemes-dev.herokuapp.com/invite/request/",
                 {email: $( "input#i-email").val()}, 
                 function( data ) {
                     $( ".result" ).html( data );
             });
+
+            // Creating a survey result
+            var vals = {
+                email: $( "input#i-email").val(),
+                reason: $( "textarea#i-reason").val()
+            }
+            console.log(vals)
+            $.post( "https://lexemes-dev.herokuapp.com/survey/response/add/",
+                {   title: 'Registration',
+                    values: JSON.stringify(vals, null, 2)})
         });
 
         // Target your .container, .wrapper, .post, etc.
