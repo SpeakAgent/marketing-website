@@ -48,6 +48,15 @@
 
         });
 
+        $("form#request-invite").submit(function(event){
+            event.preventDefault();
+            var $inputs = $('form#request-invite :input');
+            $.post( "http://127.0.0.1:8000/invite/request/",
+                {email: $( "input#i-email").val()}, 
+                function( data ) {
+                    $( ".result" ).html( data );
+            });
+        });
 
         // Target your .container, .wrapper, .post, etc.
         $(".entry-content").fitVids();

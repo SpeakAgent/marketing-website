@@ -51,9 +51,9 @@ function print_learner_cta(){
 //* Print Request Form
 
 function print_form_invite_req(){
-	echo '<div class="form-container"><div class="cta-invite"><h2>Join Today!</h2>
+	echo '<div class="form-container"><div class="cta-invite"><h2>Join Now!</h2>
 		<p>Apply for the Speak Agent Beta so you can use great audiovisual activities! <a href="/about">Learn more.</a></p></div>
-		<form>
+		<form id="request-invite">
 		<fieldset>
 			<div class="form-group">
 			<label for="i-email">Enter your email. <small class="label-required">required</small></label>
