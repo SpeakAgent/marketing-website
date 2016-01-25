@@ -423,10 +423,31 @@ label {
     margin-bottom: 12px;
 }
 
+.form-header {
+    text-align: center;
+    h2 {
+        margin-bottom: 4px;
+    }
+    p {
+        margin-bottom: 12px;
+    }
+}
+
 .form-forgot-password {
     text-align: right;
     @include rem('font-size', 14px);
     margin-bottom: 0;
+}
+
+.form-confirmation,
+.form-err {
+    display: none;
+    .form-body {
+        text-align: center;
+        img {
+            max-width: 250px;
+        }
+    }
 }
 
 /* Tables

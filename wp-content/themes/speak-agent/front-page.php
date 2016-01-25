@@ -28,7 +28,7 @@ function print_left_col(){
 //* Define Right Column
 function print_right_col(){
 	echo '<div class="col-right one-half">';
-	print_form_invite_req();
+	print_form_invite_req_fp();
 	echo '</div>';
 }
 
@@ -48,27 +48,12 @@ function print_learner_cta(){
 		<div><a class="btn btn-lg" href="http://speakagent.github.io">Play Now! <i class="fa fa-caret-right"></i></a></div></div>';
 }
 
-//* Print Request Form
+//* Print Invite Request Form on Front Page
 
-function print_form_invite_req(){
-	echo '<div class="form-container"><div class="cta-invite"><h2>Join Now!</h2>
-		<p>Apply for the Speak Agent Beta so you can use great audiovisual activities! <a href="/about">Learn more.</a></p></div>
-		<form id="request-invite">
-		<fieldset>
-			<div class="form-group">
-			<label for="i-email">Enter your email. <small class="label-required">required</small></label>
-			<input required type="email" id="i-email" name="i-email">
-			</div>
-			<div class="form-group">
-			<label for="i-reason">Tell us why you\'d like an invitation. <small class="label-required">required</small></label>
-			<textarea required id="i-reason" name="i-reason"></textarea>
-			</div>
-			<div class="form-group">
-				<button class="is-full-width btn-lg"><i class="fa fa-paper-plane fa-fixed"></i> Request an Invitation</button>
-			</div>
-		</fieldet>
-		</form>
-		<div class="cta-accept-invite"><a href="" class="call-popup-accept-invite">
+function print_form_invite_req_fp(){
+	echo '<div class="form-container" id="fp-form-invite">';
+	print_form_invite_req();
+	echo '<div class="cta-accept-invite"><a href="" class="call-popup-accept-invite">
 		<span class="fa-stack fa-lg fa-invite">
   			<i class="fa fa-heart fa-stack-2x"></i>
   			<i class="fa fa-arrow-right fa-stack-1x"></i>
