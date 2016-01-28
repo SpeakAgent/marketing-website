@@ -142,30 +142,56 @@ function print_sign_in_popup(){
 	</div>';
 }
 
+//* Print Invite Request Form
+
+
+function print_form_invite_req(){
+	echo '<form class="form-request-invite">
+			<div class="form-header cta-invite">
+				<h2>Join Now!</h2>
+				<p>Apply for the Speak Agent Beta so you can use great audiovisual activities! <a href="/about">Learn more.</a></p>
+			</div>
+			<fieldset>
+				<div class="form-group">
+				<label for="i-email">Enter your email. <small class="label-required">required</small></label>
+				<input required type="email" id="i-email" name="i-email">
+				</div>
+				<div class="form-group">
+				<label for="i-reason">Tell us why you\'d like an invitation. <small class="label-required">required</small></label>
+				<textarea required id="i-reason" name="i-reason"></textarea>
+				</div>
+				<div class="form-group">
+					<button class="is-full-width btn-lg"><i class="fa fa-paper-plane fa-fixed"></i> Request an Invitation</button>
+				</div>
+			</fieldset>
+		</form>
+		<div class="form-err form-request-invite-err">
+			<div class="form-header">
+				<h2>Sorry!</h2>
+				<p>It looks like there was a problem. Please try again later or <a href="/contact-us">contact us directly<a/>.</p>
+			</div>
+			<div class="form-body">
+				<p><img src="'.get_bloginfo( 'stylesheet_directory' ).'/images/symbols/sorry.png" alt="Boy saying he is sorry." /></p>
+			</div>
+		</div>
+		<div class="form-confirmation form-request-invite-conf">
+			<div class="form-header">
+				<h2>Request sent!</h2>
+				<p>Keep an eye on your email (and spam filters) to see if you made it in!</p>
+			</div>
+			<div class="form-body">
+				<p><img src="'.get_bloginfo( 'stylesheet_directory' ).'/images/symbols/thank_you.png" alt="Boy saying thank you!" /></p>
+			</div>
+		</div>';
+}
+
 //* Print Request Invite Popup
 
 function print_request_invite_popup(){
 	echo '<div class="popup popup-default mfp-with-anim mfp-hide" id="ri-form-container">
-	<div class="popup-header"><div class="cta-invite"><h2>Join Today!</h2>
-		<p>Apply for the Speak Agent Beta so you can use great audiovisual activities! <a href="/about">Learn more.</a></p></div></div>
-	<div class="popup-body">
-		<form>
-		<fieldset>
-			<div class="form-group">
-			<label for="i-email">Enter your email. <small class="label-required">required</small></label>
-			<input required type="email" id="i-email" name="i-email">
-			</div>
-			<div class="form-group">
-			<label for="i-reason">Tell us why you\'d like an invitation. <small class="label-required">required</small></label>
-			<textarea required id="i-reason" name="i-reason"></textarea>
-			</div>
-			<div class="form-group">
-				<button class="is-full-width"><i class="fa fa-fixed fa-paper-plane"></i> Request an Invitation</button>
-			</div>
-		</fieldet>
-		</form>
-	</div>
-	<div class="popup-footer">
+	<div class="popup-body">';
+	print_form_invite_req();
+	echo '</div><div class="popup-footer">
 		<p class="popup-cta-secondary"><span class="fa-stack fa-invite fa-fixed">
   			<i class="fa fa-heart fa-stack-2x"></i>
   			<i class="fa fa-arrow-right fa-stack-1x"></i>
@@ -195,10 +221,10 @@ function print_forgot_password_popup(){
 
 function print_accept_invite_popup(){
 	echo '<div class="popup popup-default mfp-with-anim mfp-hide" id="ai-form-container">
-	<div class="popup-header"><h2>Come on in!</h2>
-	<p>Find great interactive materials &amp; engaging activities for your students!</p></div>
 	<div class="popup-body">
 		<form>
+			<div class="form-header"><h2>Come on in!</h2>
+			<p>Find great interactive materials &amp; engaging activities for your students!</p></div>
 			<div class="form-group">
 			<label for="i-email">Enter your email. <small class="label-required">required</small></label>
 			<input required type="email" id="i-email" name="i-email">
@@ -215,9 +241,28 @@ function print_accept_invite_popup(){
 				<button class="is-full-width"><i class="fa fa-plus fa-fixed"></i>&nbsp;Create Account</button>
 			</div>
 		</form>
+		<div class="form-err form-accept-invite-err">
+			<div class="form-header">
+				<h2>Sorry!</h2>
+				<p>It looks like there was a problem. Please try again later or <a href="/contact-us">contact us directly<a/>.</p>
+			</div>
+			<div class="form-body">
+				<p><img src="'.get_bloginfo( 'stylesheet_directory' ).'/images/symbols/sorry.png" alt="Boy saying he is sorry." /></p>
+			</div>
+		</div>
+		<div class="form-confirmation form-accept-invite-conf">
+			<div class="form-header">
+				<h2>You\'re all set!</h2>
+				<p>Welcome to Speak Agent! Click the button below to <a href="http://speakagent.github.io">sign in</a>.</p>
+			</div>
+			<div class="form-body">
+				<p><img src="'.get_bloginfo( 'stylesheet_directory' ).'/images/symbols/thank_you.png" alt="Boy saying thank you!" /></p>
+				<p><a href="http://speakagent.github.io" class="btn btn-tertiary btn-sm btn-cta"><i class="fa fa-fixed fa-sign-in"></i> Sign In</a></p>
+			</div>
+		</div>
 	</div>
 	<div class="popup-footer">
-		<p class="popup-cta-secondary"><i class="fa fa-fixed fa-sign-in"></i> Already have an account? <a href="#" class="call-popup-sign-in">Sign In!</a></p>
+		<p class="popup-cta-secondary"><i class="fa fa-fixed fa-sign-in"></i> Already have an account? <a href="http://speakagent.github.io">Sign In!</a></p>
 	</div>
 	</div>';
 }

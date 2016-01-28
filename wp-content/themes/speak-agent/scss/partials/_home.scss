@@ -39,6 +39,7 @@
         form {
             text-align: left;
         }
+
     }
 
     .brand-promo {
@@ -70,14 +71,6 @@
     }
     .cta-invite {
         @extend .is-centered;
-        h2 {
-            @extend .is-flush-bottom;
-            margin-bottom: 4px;
-        }
-        p {
-            margin-bottom: 12px;
-        }
-
     }
     .cta-accept-invite {
         border-top: 1px solid $primary-color;
@@ -110,5 +103,9 @@
             font-weight: bold;
         }
     }
+
+
+
+
 
 }
