@@ -222,20 +222,20 @@ function print_forgot_password_popup(){
 function print_accept_invite_popup(){
 	echo '<div class="popup popup-default mfp-with-anim mfp-hide" id="ai-form-container">
 	<div class="popup-body">
-		<form>
+		<form id="form-redeem-invite">
 			<div class="form-header"><h2>Come on in!</h2>
 			<p>Find great interactive materials &amp; engaging activities for your students!</p></div>
 			<div class="form-group">
-			<label for="i-email">Enter your email. <small class="label-required">required</small></label>
-			<input required type="email" id="i-email" name="i-email">
+			<label for="r-email">Enter your email. <small class="label-required">required</small></label>
+			<input required type="email" id="r-email" name="r-email">
 			</div>
 			<div class="form-group">
-			<label for="i-email">Enter your invite code. <small class="label-required">required</small></label>
-			<input required type="text" id="i-code" name="i-code">
+			<label for="r-code">Enter your invite code. <small class="label-required">required</small></label>
+			<input required type="text" id="r-code" name="r-code">
 			</div>
 			<div class="form-group">
-			<label for="i-email">Enter a password. <small class="label-required">required</small></label>
-			<input required type="password" id="i-password" name="i-email">
+			<label for="r-password">Enter a password. <small class="label-required">required</small></label>
+			<input required type="password" id="r-password" name="r-password">
 			</div>
 			<div class="form-group">
 				<button class="is-full-width"><i class="fa fa-plus fa-fixed"></i>&nbsp;Create Account</button>

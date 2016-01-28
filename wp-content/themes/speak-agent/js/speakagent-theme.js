@@ -48,6 +48,39 @@
 
         });
 
+        $("form#form-redeem-invite").submit(function(event){
+
+            // This prevents a redirect because it was driving
+            // me nuts. Feel free to remove. -KC
+
+            event.preventDefault();
+
+            // Sending the actual invite
+
+            var $inputs = $('form.form-redeem-invite :input');
+            console.log($inputs)
+
+            $.post( "https://lexemes-dev.herokuapp.com/invite/redeem/", {
+                email: $( "input#r-email").val(),
+                code: $( "input#r-code" ).val(),
+                password: $( "input#r-password" ).val()
+                },
+                function( data ) {
+                    $( ".r-result" ).html( data );
+                    console.log( {email: $( "input#r-email").val(),
+                code: $( "input#r-code" ).val(),
+                password: $( "input#r-password" ).val()})
+                }
+            ).fail(function(){
+                $('.form-redeem-invite-err').show();
+            }).done(function(data){
+                $('.form-redeem-invite-conf').show();
+            }).always(function(){
+                $('.form-redeem-invite').hide();
+            });
+        });
+
+
         $("form.form-request-invite").submit(function(event){
 
             // This prevents a redirect because it was driving
