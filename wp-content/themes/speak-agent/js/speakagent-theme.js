@@ -96,10 +96,11 @@
 
             event.preventDefault();
 
-            // Sending the actual invite
+            // Sending the actual code and info
 
             var $inputs = $('form.form-redeem-invite :input');
-            console.log($inputs)
+
+            console.log($inputs);
 
             $.post( "https://lexemes-dev.herokuapp.com/invite/redeem/", {
                 email: $( "input#r-email").val(),
@@ -108,16 +109,19 @@
                 },
                 function( data ) {
                     $( ".r-result" ).html( data );
-                    console.log( {email: $( "input#r-email").val(),
-                code: $( "input#r-code" ).val(),
-                password: $( "input#r-password" ).val()})
                 }
-            ).fail(function(){
-                $('.form-redeem-invite-err').show();
+            ).fail(function(err){
+                if(err.status == '404') {
+                    $('.form-err-txt').html('<strong>We can\'t find that invite code.</strong> Please try again later or <a href="/contact-us">contact us directly<a/>.');
+                    $('.form-redeem-invite-err').show();
+                } else {
+                    $('.form-err-txt').html('It looks like there was a problem. Please try again later or <a href="/contact-us">contact us directly<a/>.');
+                    $('.form-redeem-invite-err').show();
+                }
             }).done(function(data){
                 $('.form-redeem-invite-conf').show();
             }).always(function(){
-                $('.form-redeem-invite').hide();
+                $('#form-redeem-invite').hide();
             });
         });
 
