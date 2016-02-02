@@ -36,7 +36,8 @@
             mainClass: 'mfp-zoom-in'
         });
 
-        // Accept Invite
+        // Redeem Invite
+
         $('.call-popup-accept-invite').magnificPopup({
             removalDelay: 500,
             items: {
@@ -44,9 +45,86 @@
                 type: 'inline'
             },
             mainClass: 'mfp-zoom-in'
+        });
 
+
+        /* Checks URL on page load to see if it is someone redeeming the invite */
+        function getParameterByName(name) {
+            name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+            var regex = new RegExp("[\\?&]" + name + "=([^&#]*)"),
+                results = regex.exec(location.search);
+            return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+        }
+
+        $(window).load(function(){
+
+            var varCheck = window.location.search;
+
+            if (varCheck){
+
+                // Gets Invite Code
+                var redeemVar = getParameterByName('redeem');
+
+                // Gets Invitee Email Addy
+                var inviteeVar = getParameterByName('invitee');
+
+                if(redeemVar){
+                    $("input#r-code").val(redeemVar);
+                    $.magnificPopup.open({
+                        removalDelay: 500,
+                        items: {
+                            src: '#ai-form-container',
+                            type: 'inline'
+                        },
+                        mainClass: 'mfp-zoom-in'
+                    });
+
+                }
+
+                if (inviteeVar) {
+                    $("input#r-email").val(inviteeVar);
+                }
+            }
 
         });
+
+
+        $("form#form-redeem-invite").submit(function(event){
+
+            // This prevents a redirect because it was driving
+            // me nuts. Feel free to remove. -KC
+
+            event.preventDefault();
+
+            // Sending the actual code and info
+
+            var $inputs = $('form.form-redeem-invite :input');
+
+            console.log($inputs);
+
+            $.post( "https://lexemes-dev.herokuapp.com/invite/redeem/", {
+                email: $( "input#r-email").val(),
+                code: $( "input#r-code" ).val(),
+                password: $( "input#r-password" ).val()
+                },
+                function( data ) {
+                    $( ".r-result" ).html( data );
+                }
+            ).fail(function(err){
+                if(err.status == '404') {
+                    $('.form-err-txt').html('<strong>We can\'t find that invite code.</strong> Please try again later or <a href="/contact-us">contact us directly<a/>.');
+                    $('.form-redeem-invite-err').show();
+                } else {
+                    $('.form-err-txt').html('It looks like there was a problem. Please try again later or <a href="/contact-us">contact us directly<a/>.');
+                    $('.form-redeem-invite-err').show();
+                }
+            }).done(function(data){
+                $('.form-redeem-invite-conf').show();
+            }).always(function(){
+                $('#form-redeem-invite').hide();
+            });
+        });
+
 
         $("form.form-request-invite").submit(function(event){
 
@@ -87,8 +165,34 @@
                     values: JSON.stringify(vals, null, 2)})
         });
 
-        // Target your .container, .wrapper, .post, etc.
+        // Show/Hide Password in Redeem Invite form from http://jsfiddle.net/herdiansc/dnznh/8/
+
+        $.toggleShowPassword = function (options) {
+            var settings = $.extend({
+                field: "#r-password",
+                control: "#r-show-password",
+            }, options);
+
+            var control = $(settings.control);
+            var field = $(settings.field)
+
+            control.bind('click', function () {
+                if (control.is(':checked')) {
+                    field.attr('type', 'text');
+                } else {
+                    field.attr('type', 'password');
+                }
+            })
+        };
+
+        $.toggleShowPassword({
+            field: '#r-password',
+            control: '#r-show-password',
+        });
+
+        // Target your .container, .wrapper, .post, etc. so that Videos become responsive
         $(".entry-content").fitVids();
+
 
     });
 

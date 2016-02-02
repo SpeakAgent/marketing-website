@@ -409,7 +409,7 @@ label {
     color: $font-color;
     font-weight: 700;
     small {
-        @include rem('font-size',8px);
+        @include rem('font-size',12px);
     }
     .label-required {
         color: $danger-color;
@@ -421,6 +421,7 @@ label {
 
 .form-group {
     margin-bottom: 12px;
+    @extend .clearfix;
 }
 
 .form-header {
@@ -1548,7 +1549,7 @@ Popups - Magnific-Popup
 }
 
 
-// Animations
+// Animations for Popup
 
 /* ====== Zoom effect ======
 */
@@ -1603,5 +1604,8 @@ Contact Form 7
         p.f-row {
             display: none;
         }
+    }
+    .wpcf7-form-control-wrap {
+        margin-bottom: 24px;
     }
 }

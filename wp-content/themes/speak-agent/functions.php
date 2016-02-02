@@ -137,7 +137,7 @@ function print_sign_in_popup(){
 		</div>
 	</form></div>
 	<div class="popup-footer">
-		<p class="popup-cta-secondary"><i class="fa fa-fixed fa-paper-plane"></i> No account? <a href="#" class="call-popup-request-invite">Request an invite.</a></p>
+		<p class="popup-cta-secondary"><a href="#" class="call-popup-request-invite"><i class="fa fa-fixed fa-paper-plane"></i> No account? Request an invite.</a></p>
 	</div>
 	</div>';
 }
@@ -168,7 +168,8 @@ function print_form_invite_req(){
 		<div class="form-err form-request-invite-err">
 			<div class="form-header">
 				<h2>Sorry!</h2>
-				<p>It looks like there was a problem. Please try again later or <a href="/contact-us">contact us directly<a/>.</p>
+
+				<p>It looks like there was a problem. Please try again later or <a href="/contact-us">contact us directly</a>.</p>
 			</div>
 			<div class="form-body">
 				<p><img src="'.get_bloginfo( 'stylesheet_directory' ).'/images/symbols/sorry.png" alt="Boy saying he is sorry." /></p>
@@ -192,10 +193,14 @@ function print_request_invite_popup(){
 	<div class="popup-body">';
 	print_form_invite_req();
 	echo '</div><div class="popup-footer">
-		<p class="popup-cta-secondary"><span class="fa-stack fa-invite fa-fixed">
+		<p class="popup-cta-secondary">
+		<a href="#" class="call-popup-accept-invite">
+		<span class="fa-stack fa-invite fa-fixed">
   			<i class="fa fa-heart fa-stack-2x"></i>
   			<i class="fa fa-arrow-right fa-stack-1x"></i>
-		</span>&nbsp; Have a code? <a href="#" class="call-popup-accept-invite">Accept your invite!</a></p></div></div>';
+		</span>&nbsp; Have a code? Accept your invite!</a>
+
+		</p></div></div>';
 }
 
 //* Print Forgot Password Popup
@@ -222,35 +227,36 @@ function print_forgot_password_popup(){
 function print_accept_invite_popup(){
 	echo '<div class="popup popup-default mfp-with-anim mfp-hide" id="ai-form-container">
 	<div class="popup-body">
-		<form>
+		<form id="form-redeem-invite">
 			<div class="form-header"><h2>Come on in!</h2>
-			<p>Find great interactive materials &amp; engaging activities for your students!</p></div>
+			<p>Use your invite code to get engaging activities for your students!</p></div>
 			<div class="form-group">
-			<label for="i-email">Enter your email. <small class="label-required">required</small></label>
-			<input required type="email" id="i-email" name="i-email">
+			<label for="r-email">Enter your email. <small class="label-required">required</small></label>
+			<input required type="email" id="r-email" name="r-email">
 			</div>
 			<div class="form-group">
-			<label for="i-email">Enter your invite code. <small class="label-required">required</small></label>
-			<input required type="text" id="i-code" name="i-code">
+			<label for="r-code">Enter your invite code. <small class="label-required">required</small></label>
+			<input required type="text" id="r-code" name="r-code">
 			</div>
 			<div class="form-group">
-			<label for="i-email">Enter a password. <small class="label-required">required</small></label>
-			<input required type="password" id="i-password" name="i-email">
+			<label for="r-password">Create a password. <small class="label-required">required</small></label>
+			<input required type="password" id="r-password" name="r-password">
+			<label for="r-show-password" class="alignright"><small><input id="r-show-password" type="checkbox" /> Show password</small></label>
 			</div>
 			<div class="form-group">
 				<button class="is-full-width"><i class="fa fa-plus fa-fixed"></i>&nbsp;Create Account</button>
 			</div>
 		</form>
-		<div class="form-err form-accept-invite-err">
+		<div class="form-err form-redeem-invite-err">
 			<div class="form-header">
 				<h2>Sorry!</h2>
-				<p>It looks like there was a problem. Please try again later or <a href="/contact-us">contact us directly<a/>.</p>
+				<p class="form-err-txt">It looks like there was a problem. Please try again later or <a href="/contact-us">contact us directly<a/>.</p>
 			</div>
 			<div class="form-body">
 				<p><img src="'.get_bloginfo( 'stylesheet_directory' ).'/images/symbols/sorry.png" alt="Boy saying he is sorry." /></p>
 			</div>
 		</div>
-		<div class="form-confirmation form-accept-invite-conf">
+		<div class="form-confirmation form-redeem-invite-conf">
 			<div class="form-header">
 				<h2>You\'re all set!</h2>
 				<p>Welcome to Speak Agent! Click the button below to <a href="http://speakagent.github.io">sign in</a>.</p>
@@ -262,7 +268,7 @@ function print_accept_invite_popup(){
 		</div>
 	</div>
 	<div class="popup-footer">
-		<p class="popup-cta-secondary"><i class="fa fa-fixed fa-sign-in"></i> Already have an account? <a href="http://speakagent.github.io">Sign In!</a></p>
+		<p class="popup-cta-secondary"><a href="http://speakagent.github.io"><i class="fa fa-fixed fa-sign-in"></i> Already have an account? Sign In!</a></p>
 	</div>
 	</div>';
 }

@@ -57,7 +57,7 @@ function print_form_invite_req_fp(){
 		<span class="fa-stack fa-lg fa-invite">
   			<i class="fa fa-heart fa-stack-2x"></i>
   			<i class="fa fa-arrow-right fa-stack-1x"></i>
-		</span> Have a code? <strong>Accept your invite!</strong></div></div></div>';
+		</span> <strong>Have a code? Accept your invite!</strong></div></div></div>';
 }
 
 //* Print Learn More Link
