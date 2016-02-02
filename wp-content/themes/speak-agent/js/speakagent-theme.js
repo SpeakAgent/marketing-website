@@ -161,8 +161,34 @@
                     values: JSON.stringify(vals, null, 2)})
         });
 
+        // Show/Hide Password in Redeem Invite form from http://jsfiddle.net/herdiansc/dnznh/8/
+
+        $.toggleShowPassword = function (options) {
+            var settings = $.extend({
+                field: "#r-password",
+                control: "#r-show-password",
+            }, options);
+
+            var control = $(settings.control);
+            var field = $(settings.field)
+
+            control.bind('click', function () {
+                if (control.is(':checked')) {
+                    field.attr('type', 'text');
+                } else {
+                    field.attr('type', 'password');
+                }
+            })
+        };
+
+        $.toggleShowPassword({
+            field: '#r-password',
+            control: '#r-show-password',
+        });
+
         // Target your .container, .wrapper, .post, etc. so that Videos become responsive
         $(".entry-content").fitVids();
+
 
     });
 

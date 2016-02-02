@@ -236,6 +236,7 @@ function print_accept_invite_popup(){
 			<div class="form-group">
 			<label for="r-password">Create a password. <small class="label-required">required</small></label>
 			<input required type="password" id="r-password" name="r-password">
+			<label for="r-show-password" class="alignright"><small><input id="r-show-password" type="checkbox" /> Show password</small></label>
 			</div>
 			<div class="form-group">
 				<button class="is-full-width"><i class="fa fa-plus fa-fixed"></i>&nbsp;Create Account</button>
