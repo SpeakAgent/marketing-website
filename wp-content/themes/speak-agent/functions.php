@@ -224,7 +224,7 @@ function print_accept_invite_popup(){
 	<div class="popup-body">
 		<form id="form-redeem-invite">
 			<div class="form-header"><h2>Come on in!</h2>
-			<p>Find great interactive materials &amp; engaging activities for your students!</p></div>
+			<p>Use your invite code to get engaging activities for your students!</p></div>
 			<div class="form-group">
 			<label for="r-email">Enter your email. <small class="label-required">required</small></label>
 			<input required type="email" id="r-email" name="r-email">
@@ -234,7 +234,7 @@ function print_accept_invite_popup(){
 			<input required type="text" id="r-code" name="r-code">
 			</div>
 			<div class="form-group">
-			<label for="r-password">Enter a password. <small class="label-required">required</small></label>
+			<label for="r-password">Create a password. <small class="label-required">required</small></label>
 			<input required type="password" id="r-password" name="r-password">
 			</div>
 			<div class="form-group">

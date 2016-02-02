@@ -36,7 +36,8 @@
             mainClass: 'mfp-zoom-in'
         });
 
-        // Accept Invite
+        // Redeem Invite
+
         $('.call-popup-accept-invite').magnificPopup({
             removalDelay: 500,
             items: {
@@ -44,9 +45,49 @@
                 type: 'inline'
             },
             mainClass: 'mfp-zoom-in'
+        });
 
+
+        /* Checks URL on page load to see if it is someone redeeming the invite */
+        function getParameterByName(name) {
+            name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+            var regex = new RegExp("[\\?&]" + name + "=([^&#]*)"),
+                results = regex.exec(location.search);
+            return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+        }
+
+        $(window).load(function(){
+
+            var varCheck = window.location.search;
+
+            if (varCheck){
+
+                // Gets Invite Code
+                var redeemVar = getParameterByName('redeem');
+
+                // Gets Invitee Email Addy
+                var inviteeVar = getParameterByName('invitee');
+
+                if(redeemVar){
+                    $("input#r-code").val(redeemVar);
+                    $.magnificPopup.open({
+                        removalDelay: 500,
+                        items: {
+                            src: '#ai-form-container',
+                            type: 'inline'
+                        },
+                        mainClass: 'mfp-zoom-in'
+                    });
+
+                }
+
+                if (inviteeVar) {
+                    $("input#r-email").val(inviteeVar);
+                }
+            }
 
         });
+
 
         $("form#form-redeem-invite").submit(function(event){
 
@@ -120,7 +161,7 @@
                     values: JSON.stringify(vals, null, 2)})
         });
 
-        // Target your .container, .wrapper, .post, etc.
+        // Target your .container, .wrapper, .post, etc. so that Videos become responsive
         $(".entry-content").fitVids();
 
     });
