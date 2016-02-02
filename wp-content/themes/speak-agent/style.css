@@ -2777,3 +2777,7 @@ Contact Form 7
 .wpcf7-form.sent p.f-row {
   display: none;
 }
+/* line 1608, scss/style.scss */
+.wpcf7-form .wpcf7-form-control-wrap {
+  margin-bottom: 24px;
+}
