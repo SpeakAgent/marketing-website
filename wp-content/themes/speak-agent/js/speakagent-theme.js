@@ -102,7 +102,7 @@
 
             console.log($inputs);
 
-            $.post( "https://lexemes-dev.herokuapp.com/invite/redeem/", {
+            $.post( "https://lexemes-prod.herokuapp.com/invite/redeem/", {
                 email: $( "input#r-email").val(),
                 code: $( "input#r-code" ).val(),
                 password: $( "input#r-password" ).val()
@@ -137,7 +137,7 @@
 
             var $inputs = $('form.form-request-invite :input');
 
-            $.post( "https://lexemes-dev.herokuapp.com/invite/request/", {
+            $.post( "https://lexemes-prod.herokuapp.com/invite/request/", {
                 email: $( "input#i-email").val()
                 },
                 function( data ) {
@@ -160,7 +160,7 @@
 
             console.log(vals)
 
-            $.post( "https://lexemes-dev.herokuapp.com/survey/response/add/",
+            $.post( "https://lexemes-prod.herokuapp.com/survey/response/add/",
                 {   title: 'Registration',
                     values: JSON.stringify(vals, null, 2)})
         });

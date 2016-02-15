@@ -1,6 +1,6 @@
 
 /*
-    Theme Name: Speak Agent, from Minimum
+    Theme Name: Speak Agent
     Theme URI: http://my.studiopress.com/themes/minimum/
     Description: A mobile responsive and HTML5 theme built for the Genesis Framework.
     Author: StudioPress, adapted by Speak Agent and Rocketkoi
@@ -10,7 +10,7 @@
 
     Tags:
 
-    This Theme is built from the Minimum Pro theme for Genesis. It was done this way because Minimum handled all our marketing needs and we just need to create a homepage and add our specific styles.
+    This Theme is based on the Minimum Pro theme for Genesis. It was done this way because Minimum handled all our marketing needs and we just need to create a unique homepage and add our specific styles.
 
     Template: genesis
     Template Version: 2.2.6
@@ -109,7 +109,8 @@ p{margin-bottom:12px}.form-forgot-password{text-align:right;font-size:14px;font-
 .form-err .form-body
 img{max-width:250px}table{border-collapse:collapse;border-spacing:0;line-height:2;margin-bottom:40px;width:100%}tbody{border-bottom:1px solid #ddd}th,td{text-align:left}th{font-weight:bold;text-transform:uppercase}td{border-top:1px solid #ddd;padding:6px
 0}.wrap{margin:0
-auto;max-width:1140px}@media only screen and (max-width: 1179px){.wrap{max-width:960px}}@media only screen and (max-width: 1023px){.wrap{max-width:768px}}.site-inner{padding-top:24px;padding-top:1.5rem;background-color:#fff;clear:both}.content{float:left;width:720px}@media only screen and (max-width: 1179px){.content{width:580px}}@media only screen and (max-width: 1023px){.content{width:100%}}.sidebar-content
+auto;max-width:1140px}@media only screen and (max-width: 1179px){.wrap{max-width:960px}}@media only screen and (max-width: 1023px){.wrap{max-width:768px}}.site-inner{padding-top:24px;padding-top:1.5rem;background-color:#fff;clear:both}.site-inner>.wrap{padding:0
+24px}.content{float:left;width:720px}@media only screen and (max-width: 1179px){.content{width:580px}}@media only screen and (max-width: 1023px){.content{width:100%}}.sidebar-content
 .content{float:right}.full-width-content
 .content{float:none;width:80%;margin:0
 auto}@media only screen and (max-width: 1023px){.full-width-content
@@ -202,15 +203,15 @@ p{font-family:"Noto Sans","Lucida Grande",Tahoma,Arial,sans-serif;font-weight:30
 solid #009597;padding:24px;width:auto;max-width:480px;margin:2px
 auto;text-align:center}.popup .popup-header{padding-bottom:12px}.popup .popup-body{padding-bottom:12px;text-align:left}.popup .popup-footer{border-top:1px solid #009597;padding-top:12px}.popup .popup-cta-secondary
 a{font-weight:900}.mfp-zoom-in{}.mfp-zoom-in .mfp-with-anim{opacity:0;-moz-transition:all 0.2s ease-in-out;-o-transition:all 0.2s ease-in-out;-webkit-transition:all 0.2s ease-in-out;transition:all 0.2s ease-in-out;transform:scale(0.8)}.mfp-zoom-in.mfp-bg{opacity:0;-moz-transition:all 0.3s ease-out;-o-transition:all 0.3s ease-out;-webkit-transition:all 0.3s ease-out;transition:all 0.3s ease-out}.mfp-zoom-in.mfp-ready .mfp-with-anim{opacity:1;transform:scale(1)}.mfp-zoom-in.mfp-ready.mfp-bg{opacity:0.8}.mfp-zoom-in.mfp-removing .mfp-with-anim{transform:scale(0.8);opacity:0}.mfp-zoom-in.mfp-removing.mfp-bg{opacity:0}.home{background-color:#009597}.home .site-inner{background:#f8d338}@media (min-width: 481px){.home .site-inner{background-image:url("/wp-content/themes/speak-agent/images/bground-home.png");background-size:200%;background-repeat:repeat-x;background-position:center bottom}}@media (min-width: 768px){.home .site-inner{background-size:150%}}@media (min-width: 801px){.home .site-inner{padding:30px
-0;background-size:90%}}.home .col-left{background-image:url("/wp-content/themes/speak-agent/images/bground-glow.png");background-size:100%;background-repeat:no-repeat;padding-bottom:24px}@media (min-width: 481px){.home .col-left{padding-bottom:0}}.home .form-container{background-color:#fff;border-top:1px solid #009597;padding:20px}@media (min-width: 481px){.home .form-container{border:1px
+0;background-size:90%}}.home .site-inner>.wrap{padding:0}.home .col-left{background-image:url("/wp-content/themes/speak-agent/images/bground-glow.png");background-size:100%;background-repeat:no-repeat;padding-bottom:24px}@media (min-width: 481px){.home .col-left{padding-bottom:0}}.home .form-container{background-color:#fff;border-top:1px solid #009597;padding:20px}@media (min-width: 481px){.home .form-container{border:1px
 solid #009597;max-width:85%}}.home .form-container
 form{text-align:left}.home .brand-promo
 h1{max-width:420px;padding:0
 24px}@media (min-width: 769px){.home .brand-promo
 h1{padding:0}}.home .brand-promo .brand-tagline{font-weight:normal}.home .brand-promo .brand-tagline
-em{font-weight:900;font-style:normal}.home .cta-accept-invite{border-top:1px solid #009597;margin-top:24px;padding-top:16px}.home .cta-accept-invite span.fa-stack{display:block;margin:0
+em{font-weight:900;font-style:normal}.home .cta-learner{padding-bottom:24px}.home .cta-accept-invite{border-top:1px solid #009597;margin-top:24px;padding-top:16px}.home .cta-accept-invite span.fa-stack{display:block;margin:0
 auto;text-align:center}@media (min-width: 1024px){.home .cta-accept-invite span.fa-stack{display:inline-block}}.home .sub-footer{padding-top:24px;padding-bottom:12px;font-size:18px;font-size:1.125rem}@media (min-width: 481px){.home .sub-footer{font-size:24px;font-size:1.5rem}}.home .sub-footer
-a{color:#fff;font-weight:bold}.wpcf7-form.sent p.f-row{display:none}div.wpcf7{margin:0;padding:0}div.wpcf7-response-output{margin:2em
+a{color:#fff;font-weight:bold}.wpcf7-form.sent p.f-row{display:none}.wpcf7-form .wpcf7-form-control-wrap{margin-bottom:24px}div.wpcf7{margin:0;padding:0}div.wpcf7-response-output{margin:2em
 0.5em 1em;padding:0.2em 1em}div.wpcf7 .screen-reader-response{position:absolute;overflow:hidden;clip:rect(1px,1px,1px,1px);height:1px;width:1px;margin:0;padding:0;border:0}div.wpcf7-mail-sent-ok{border:2px
 solid #398f14}div.wpcf7-mail-sent-ng{border:2px
 solid #f00}div.wpcf7-spam-blocked{border:2px

@@ -199,7 +199,6 @@ function print_request_invite_popup(){
   			<i class="fa fa-heart fa-stack-2x"></i>
   			<i class="fa fa-arrow-right fa-stack-1x"></i>
 		</span>&nbsp; Have a code? Accept your invite!</a>
-
 		</p></div></div>';
 }
 
@@ -250,7 +249,7 @@ function print_accept_invite_popup(){
 		<div class="form-err form-redeem-invite-err">
 			<div class="form-header">
 				<h2>Sorry!</h2>
-				<p class="form-err-txt">It looks like there was a problem. Please try again later or <a href="/contact-us">contact us directly<a/>.</p>
+				<p class="form-err-txt">It looks like there was a problem. Please try again later or <a href="/contact-us">contact us directly</a>.</p>
 			</div>
 			<div class="form-body">
 				<p><img src="'.get_bloginfo( 'stylesheet_directory' ).'/images/symbols/sorry.png" alt="Boy saying he is sorry." /></p>

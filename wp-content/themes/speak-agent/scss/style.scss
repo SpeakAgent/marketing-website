@@ -1,5 +1,5 @@
 /*!
-    Theme Name: Speak Agent, from Minimum
+    Theme Name: Speak Agent
     Theme URI: http://my.studiopress.com/themes/minimum/
     Description: A mobile responsive and HTML5 theme built for the Genesis Framework.
     Author: StudioPress, adapted by Speak Agent and Rocketkoi
@@ -9,7 +9,7 @@
 
     Tags:
 
-    This Theme is built from the Minimum Pro theme for Genesis. It was done this way because Minimum handled all our marketing needs and we just need to create a homepage and add our specific styles.
+    This Theme is based on the Minimum Pro theme for Genesis. It was done this way because Minimum handled all our marketing needs and we just need to create a unique homepage and add our specific styles.
 
     Template: genesis
     Template Version: 2.2.6
@@ -505,6 +505,9 @@ Structure and Layout
     @include rem('padding-top', 24px);
     background-color: #fff;
     clear: both;
+    > .wrap {
+        padding: 0 24px;
+    }
 }
 
 
@@ -1105,6 +1108,7 @@ nav {
 --------------------------------------------- */
 
 .nav-secondary {
+    margin-bottom: 8px;
     text-align: center;
     ul {
         display: inline-block;
@@ -1407,7 +1411,7 @@ Footer Widgets
 }
 
 .footer-widgets .wrap {
-    padding: 40px 0 16px;
+    padding: 16px 0 16px;
     @include breakpoint(tablet){
         padding-bottom: 0;
     }

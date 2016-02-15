@@ -6,16 +6,6 @@ remove_action( 'genesis_entry_header', 'genesis_do_post_title' );
 //* Remove Default Content markup
 remove_action( 'genesis_loop', 'genesis_do_loop' );
 
-//* Remove Footer from home page
-
-/** Remove footer widgets */
-remove_theme_support( 'genesis-footer-widgets', 3 );
-
-
-
-//* Print out homepage
-
-
 
 //* Define Left Column
 function print_left_col(){
@@ -57,17 +47,17 @@ function print_form_invite_req_fp(){
 		<span class="fa-stack fa-lg fa-invite">
   			<i class="fa fa-heart fa-stack-2x"></i>
   			<i class="fa fa-arrow-right fa-stack-1x"></i>
-		</span> <strong>Have a code? Accept your invite!</strong></div></div></div>';
+		</span> <strong>Have a code? Accept your invite!</strong></a></div></div></div>';
 }
 
 //* Print Learn More Link
 
 function print_sub_footer() {
-	echo '<div class="sub-footer"><p><a href="/about">Learn more about Speak Agent <i class="fa fa-caret-right"></i></a></p></div>';
+	echo '<div class="sub-footer"><div class="wrap"><p><a href="/about">Learn more about Speak Agent <i class="fa fa-caret-right"></i></a></p></div></div>';
 }
 
 
-add_action('genesis_before_footer','print_sub_footer');
+add_action('genesis_before_footer','print_sub_footer', 0);
 add_action( 'genesis_before_loop', 'print_left_col' );
 add_action('genesis_before_loop', 'print_right_col');
 

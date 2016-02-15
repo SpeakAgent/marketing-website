@@ -425,7 +425,7 @@ return array(
 	'browsercache.other.etag' => false,
 	'browsercache.other.w3tc' => false,
 	'browsercache.other.replace' => false,
-	'browsercache.timestamp' => '',
+	'browsercache.timestamp' => '1455206144',
 	'browsercache.replace.exceptions' => array(
 	),
 	'mobile.enabled' => false,
