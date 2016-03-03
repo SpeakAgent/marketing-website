@@ -3,14 +3,18 @@ function importbuddy_loadRestoreEvents() {
 	
 	// Update status log details, messages, or errors.
 	jQuery('#backupbuddy_messages').bind('backupbuddy_details backupbuddy_message backupbuddy_error backupbuddy_warning', function(e, json) {
+		classType = '';
+		
 		if ( 'backupbuddy_error' == e.type ) {
 			json.data = backupbuddyError( json.data );
+			classType = 'error';
 		}
 		if ( 'backupbuddy_warning' == e.type ) {
 			json.data = backupbuddyWarning( json.data );
+			classType = 'warning';
 		}
 	
-		backupbuddy_log( json );
+		backupbuddy_log( json, classType );
 	});
 	
 	

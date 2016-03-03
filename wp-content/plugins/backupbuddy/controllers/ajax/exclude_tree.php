@@ -1,5 +1,7 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
+
 // Directory exclusions picker for settings page.
 
 /*	exclude_tree()

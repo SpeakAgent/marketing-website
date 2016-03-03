@@ -1,13 +1,17 @@
 <?php
 // Authored by Skyler Moore.
 
+if ( isset( $destination['disabled'] ) && ( '1' == $destination['disabled'] ) ) {
+	die( __( 'This destination is currently disabled based on its settings. Re-enable it under its Advanced Settings.', 'it-l10n-backupbuddy' ) );
+}
+
 pb_backupbuddy::$ui->title( 'FTP' );
 
 // FTP connection information
 $ftp_server = $destination['address'];
 $ftp_username = $destination['username'];
 $ftp_password = $destination['password'];
-$ftp_directory = $destination['path'];
+$ftp_directory = (string)$destination['path'];
 $ftps = $destination['ftps'];
 if ( !empty( $ftp_directory ) ) {
 	$ftp_directory = $ftp_directory . '/';
@@ -78,7 +82,7 @@ if ( !empty( $_POST['delete_file'] ) ) {
 			pb_backupbuddy::status( 'error', 'Unknown FTP active/passive mode: `' . $active . '`.' );
 		}
 		
-		ftp_chdir( $conn_id, $ftp_directory );
+		ftp_chdir( $conn_id, (string)$ftp_directory );
 		
 		// loop through and delete ftp backup files
 		foreach ( $_POST['files'] as $backup ) {
@@ -104,9 +108,12 @@ if ( !empty( $_GET['cpy_file'] ) ) {
 	pb_backupbuddy::alert( 'The remote file is now being copied to your local backups. If the backup gets marked as bad during copying, please wait a bit then click the `Refresh` icon to rescan after the transfer is complete.' );
 	echo '<br>';
 	pb_backupbuddy::status( 'details',  'Scheduling Cron for creating ftp copy.' );
-	backupbuddy_core::schedule_single_event( time(), pb_backupbuddy::cron_tag( 'process_ftp_copy' ), array( $_GET['cpy_file'], $ftp_server, $ftp_username, $ftp_password, $ftp_directory, $port, $ftps ) );
-	spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
-	update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+	backupbuddy_core::schedule_single_event( time(), 'process_ftp_copy', array( $_GET['cpy_file'], $ftp_server, $ftp_username, $ftp_password, $ftp_directory, $port, $ftps ) );
+	
+	if ( '1' != pb_backupbuddy::$options['skip_spawn_cron_call'] ) {
+		update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+		spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
+	}
 }
 
 
@@ -141,8 +148,11 @@ if ( $ftps == '1' ) { // Connect with FTPs.
 
 
 // Login with username and password
-$login_result = ftp_login( $conn_id, $ftp_username, $ftp_password );
-
+$login_result = @ftp_login( $conn_id, $ftp_username, $ftp_password );
+if ( false === $login_result ) {
+	pb_backupbuddy::alert( 'Failure attempting to log in. PHP function ftp_login() returned false.' );
+	die();
+}
 
 if ( $active === true ) {
 	// do nothing, active is default.

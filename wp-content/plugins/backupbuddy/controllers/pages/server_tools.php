@@ -129,7 +129,7 @@ if ( !defined( 'PB_IMPORTBUDDY' ) ) { // NOT IN IMPORTBUDDY:
 		}
 		
 		$wp_settings[] = array( 'BackupBuddy local storage', backupbuddy_core::getBackupDirectory(), 'BackupBuddy Settings' );
-		$wp_settings[] = array( 'BackupBuddy temporary files', backupbuddy_core::getTempDirectory(), 'Upload Base + BackupBuddy' );
+		$wp_settings[] = array( 'BackupBuddy temporary files', backupbuddy_core::getTempDirectory(), 'ABSPATH + Hardcoded location' );
 		$wp_settings[] = array( 'BackupBuddy logs', backupbuddy_core::getLogDirectory(), 'Upload Base + BackupBuddy' );
 		
 		// Display WP settings..

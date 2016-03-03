@@ -3,15 +3,28 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) || ( true !== PB_IMPORTBUDDY ) ) {
 	die( '<html></html>' );
 }
 Auth::require_authentication(); // Die if not logged in.
-pb_backupbuddy::set_greedy_script_limits( true );
 pb_backupbuddy::load_view( '_iframe_header');
+pb_backupbuddy::set_greedy_script_limits();
 echo "<script>pageTitle( 'Step 2: Restoring Files' );</script>";
+pb_backupbuddy::status( 'details', 'Loading step 2.' );
 echo "<script>bb_showStep( 'unzippingFiles' );</script>";
 pb_backupbuddy::flush();
 
-// Determine selected archive file.
-$archiveFile = str_replace( array( '\\', '/' ), '', pb_backupbuddy::_POST( 'file' ) );
-if ( ! file_exists( ABSPATH . $archiveFile ) ) {
+if ( 'true' != pb_backupbuddy::_GET( 'deploy' ) ) { // deployment mode pre-loads state data in a file instead of passing via post.
+	// Determine selected archive file.
+	$archiveFile = ABSPATH . str_replace( array( '\\', '/' ), '', pb_backupbuddy::_POST( 'file' ) );
+	$existing_state = array();
+} else {
+	if ( isset( pb_backupbuddy::$options['default_state_overrides'] ) && ( count( pb_backupbuddy::$options['default_state_overrides'] ) > 0 ) ) { // Default state overrides exist. Apply them.
+		$archiveFile = pb_backupbuddy::$options['default_state_overrides']['archive'];
+		$existing_state = pb_backupbuddy::$options['default_state_overrides'];
+		$existing_state['tempPath'] = ABSPATH . 'importbuddy/temp_' . pb_backupbuddy::random_string( 12 ) . '/';
+	} else {
+		die( 'Error #843797944: Missing expected default state override.' );
+	}
+}
+
+if ( ! file_exists( $archiveFile ) ) {
 	die( 'Error #834984: Specified backup archive `' . htmlentities( $archiveFile ) . '` not found. Did you delete it? If the file exists, try again or verify proper read file permissions for PHP to access the file.' );
 }
 
@@ -23,7 +36,7 @@ if ( '1' == pb_backupbuddy::_POST( 'skipUnzip' ) ) {
 
 // Instantiate restore class.
 require_once( pb_backupbuddy::plugin_path() . '/classes/restore.php' );
-$restore = new backupbuddy_restore( 'restore' );
+$restore = new backupbuddy_restore( 'restore', $existing_state );
 $status = $restore->start( $archiveFile, $skipUnzip );
 if ( false === $status ) {
 	$errors = $restore->getErrors();
@@ -39,7 +52,9 @@ if ( false === $status ) {
 
 $restore->_state['defaultURL'] = $restore->getDefaultUrl();
 $restore->_state['defaultDomain'] = $restore->getDefaultDomain();
-$restore->_state = parse_options( $restore->_state );
+if ( 'true' != pb_backupbuddy::_GET( 'deploy' ) ) { // deployment mode pre-loads state data in a file instead of passing via post.
+	$restore->_state = parse_options( $restore->_state );
+}
 $restore->_state['skipUnzip'] = $skipUnzip;
 
 // Set up state variables.
@@ -63,14 +78,6 @@ function parse_options( $restoreData ) {
 	if ( ( 'all' == pb_backupbuddy::_POST( 'zipMethodStrategy' ) ) || ( 'ziparchive' == pb_backupbuddy::_POST( 'zipMethodStrategy' ) ) || ( 'pclzip' == pb_backupbuddy::_POST( 'zipMethodStrategy' ) ) ) {
 		$restoreData['zipMethodStrategy'] = pb_backupbuddy::_POST( 'zipMethodStrategy' );
 	}
-	
-	/*
-	if ( ( isset( $_POST['log_level'] ) ) && ( $_POST['log_level'] != '' ) ) {
-		pb_backupbuddy::$options['log_level'] = $_POST['log_level'];
-	} else {
-		pb_backupbuddy::$options['log_level'] = '';
-	}
-	*/
 	
 	return $restoreData;
 	
@@ -110,9 +117,12 @@ if ( true !== $restore->_state['skipUnzip'] ) {
 
 
 // On unzip success OR skipping unzip.
+pb_backupbuddy::status( 'details', 'Finishing step 2.' );
 if ( ( false === $restore->_state['restoreFiles'] ) || ( true === $results ) ) {
-	$restore->determineDatabaseFiles();
 	$restore->renameHtaccessTemp(); // Rename .htaccess to .htaccess.bb_temp until end of migration.
+	//sleep(1); // Give time for file rename?
+	$restore->determineDatabaseFiles();
+	pb_backupbuddy::status( 'details', 'About to load Step 3.' );
 	?>
 	<script>
 		setTimeout( function(){
@@ -126,3 +136,36 @@ if ( ( false === $restore->_state['restoreFiles'] ) || ( true === $results ) ) {
 
 // Load footer.
 pb_backupbuddy::load_view( '_iframe_footer');
+
+// Deployment proceed.
+if ( 'true' == pb_backupbuddy::_GET( 'deploy' ) ) {
+	$nextStepNum = 4;
+	echo '<!-- AUTOPROCEED TO STEP ' . $nextStepNum . ' -->';
+	
+	
+	//echo '<script>console.log( "' . print_r( $restore->_state, true ) . '" );</script>';
+	
+	
+	// Write default state overrides.
+	global $importbuddy_file;
+	$importFileSerial = backupbuddy_core::get_serial_from_file( $importbuddy_file );
+	$state_file = ABSPATH . 'importbuddy-' . $importFileSerial . '-state.php';
+	pb_backupbuddy::status( 'details', 'Writing to state file `' . $state_file . '`.' );
+	if ( false === ( $file_handle = @fopen( $state_file, 'w' ) ) ) {
+		pb_backupbuddy::status( 'error', 'Error #328937: Temp state file is not creatable/writable. Check your permissions. (' . $state_file . ')' );
+		return false;
+	}
+	if ( false === fwrite( $file_handle, "<?php die('Access Denied.'); // <!-- ?>\n" . base64_encode( serialize( $restore->_state ) ) ) ) {
+		pb_backupbuddy::status( 'error', 'Error #2389373: Unable to write to state file.' );
+	} else {
+		pb_backupbuddy::status( 'details', 'Wrote to state file.' );
+	}
+	fclose( $file_handle );
+	?>
+	<form method="post" action="?ajax=<?php echo $nextStepNum; ?>&v=<?php echo pb_backupbuddy::_GET( 'v' ); ?>&deploy=true&direction=<?php echo pb_backupbuddy::_GET( 'direction' ); ?>&display_mode=embed" id="deploy-autoProceed">
+		<!-- input type="hidden" name="restoreData" value="<?php //echo base64_encode( urlencode( json_encode( $restore->_state ) ) ); ?>" -->
+		<input type="submit" name="my-submit" value="Next Step" style="visibility: hidden;">
+	</form>
+	<script>jQuery( '#deploy-autoProceed' ).submit();</script>
+	<?php
+}

@@ -1,6 +1,8 @@
 <?php
 // @author Dustin Bolton 2012.
-
+if ( isset( $destination['disabled'] ) && ( '1' == $destination['disabled'] ) ) {
+	die( __( 'This destination is currently disabled based on its settings. Re-enable it under its Advanced Settings.', 'it-l10n-backupbuddy' ) );
+}
 
 // Set reference to destination.
 if ( isset( pb_backupbuddy::$options['remote_destinations'][pb_backupbuddy::_GET('destination_id')] ) ) {

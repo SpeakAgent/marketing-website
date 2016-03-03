@@ -1,85 +1,65 @@
 <?php
 if ( 'save' != $mode ) {
-?>
-<script>
-	jQuery(document).ready(function() {
-			// Test a remote destination.
-		jQuery( '.pb_backupbuddy_ftpdestination_pathpicker' ).click( function() {
+	// Load filetree sources if not already loaded
+	pb_backupbuddy::load_script( 'filetree.js' );
+	pb_backupbuddy::load_style( 'filetree.css' );
+	
+	?>
+	<script>
+		jQuery(document).ready(function() {
+				// Test a remote destination.
+			jQuery( '.pb_backupbuddy_ftpdestination_pathpicker' ).click( function() {
+				
+				jQuery( '.pb_backupbuddy_ftpdestination_pathpickerboxtree' ).remove(); // Remove any current trees.
+				jQuery( '.pb_backupbuddy_ftppicker_load' ).show();
+				
+				var thisPickObj = jQuery(this);
+				var pathPickerBox = thisPickObj.closest( 'form' ).find( '.pb_backupbuddy_ftpdestination_pathpickerbox' );
+				var serializedFormData = thisPickObj.closest( 'form' ).serialize();
+				
+				// Get root FTP path.
+				jQuery.get( '<?php echo pb_backupbuddy::ajax_url( 'destination_ftp_pathpicker' ); ?>&' + serializedFormData,
+					function(data) {
+						data = jQuery.trim( data );
+						pathPickerBox.html( '<div class="jQueryOuterTree" style="width: 100%;">' + data + '</div>' );
+						pathPickerBox.slideDown();
+						
+						// File picker.
+						jQuery('.pb_backupbuddy_ftpdestination_pathpickerboxtree').fileTree(
+							{
+								root: '/',
+								multiFolder: false,
+								script: '<?php echo pb_backupbuddy::ajax_url( 'destination_ftp_pathpicker' ); ?>&' + serializedFormData
+							},
+							function(file) {
+								alert( file );
+							},
+							function(directory) {
+								
+								thisPickObj.closest( 'form' ).find( '#pb_backupbuddy_path' ).val( directory );
+								
+							}
+						);
+						
+						jQuery( '.pb_backupbuddy_ftppicker_load' ).hide();
+						
+					}
+				);
+				
+				return false;
+			} );
 			
-			jQuery( '.pb_backupbuddy_ftpdestination_pathpickerboxtree' ).remove(); // Remove any current trees.
-			jQuery( '.pb_backupbuddy_ftppicker_load' ).show();
-			
-			var thisPickObj = jQuery(this);
-			var pathPickerBox = thisPickObj.closest( 'form' ).find( '.pb_backupbuddy_ftpdestination_pathpickerbox' );
-			var serializedFormData = thisPickObj.closest( 'form' ).serialize();
-			
-			// Get root FTP path.
-			jQuery.get( '<?php echo pb_backupbuddy::ajax_url( 'destination_ftp_pathpicker' ); ?>&' + serializedFormData,
-				function(data) {
-					data = jQuery.trim( data );
-					pathPickerBox.html( '<div class="jQueryOuterTree" style="width: 100%;">' + data + '</div>' );
-					pathPickerBox.slideDown();
-					
-					// File picker.
-					jQuery('.pb_backupbuddy_ftpdestination_pathpickerboxtree').fileTree(
-						{
-							root: '/',
-							multiFolder: false,
-							script: '<?php echo pb_backupbuddy::ajax_url( 'destination_ftp_pathpicker' ); ?>&' + serializedFormData
-						},
-						function(file) {
-							alert( file );
-						},
-						function(directory) {
-							
-							thisPickObj.closest( 'form' ).find( '#pb_backupbuddy_path' ).val( directory );
-							
-						}
-					);
-					
-					jQuery( '.pb_backupbuddy_ftppicker_load' ).hide();
-					
+			jQuery(document).on('mouseover mouseout', '.pb_backupbuddy_ftpdestination_pathpickerboxtree > li a', function(event) {
+				if ( event.type == 'mouseover' ) {
+					jQuery(this).children( '.pb_backupbuddy_treeselect_control' ).css( 'visibility', 'visible' );
+				} else {
+					jQuery(this).children( '.pb_backupbuddy_treeselect_control' ).css( 'visibility', 'hidden' );
 				}
-			);
+			});
 			
-			//pathPickerBox.html( '<div id="exlude_dirs" class="pb_backupbuddy_ftpdestination_pathpickerboxtree"></div>' );
-			
-			
-			
-			/*
-			jQuery.post( '<?php echo pb_backupbuddy::ajax_url( 'destination_ftp_pathpicker' ); ?>', thisPickObj.parent( 'form' ).serialize(), 
-				function(data) {
-					//jQuery( '.pb_backupbuddy_destpicker_testload' ).hide();
-					data = jQuery.trim( data );
-					alert( data );
-					thisPickObj.find( '.pb_backupbuddy_ftpdestination_pathpickerbox' ).html( data );
-				}
-			);
-*/
-			
-			return false;
-		} );
-		
-		
-		
-		
-		jQuery(document).on('mouseover mouseout', '.pb_backupbuddy_ftpdestination_pathpickerboxtree > li a', function(event) {
-			if ( event.type == 'mouseover' ) {
-				jQuery(this).children( '.pb_backupbuddy_treeselect_control' ).css( 'visibility', 'visible' );
-			} else {
-				jQuery(this).children( '.pb_backupbuddy_treeselect_control' ).css( 'visibility', 'hidden' );
-			}
 		});
-		
-		
-		
-		
-	});
-	
-	
-	
-</script>
-<?php
+	</script>
+	<?php
 }
 
 $default_name = NULL;
@@ -119,17 +99,23 @@ $settings_form->add_setting( array(
 	'rules'		=>		'required|string[0-250]',
 ) );
 
+// Don't give ability to browse to path if file management is disabled.
+if ( ! empty( $destination_settings['disable_file_management'] ) ) {
+    $browse_and_select = ' <span class="description">File Management Disabled.</span>';
+} else {
+    $browse_and_select = ' <span class="pb_backupbuddy_ftpdestination_pathpicker">
+                                <a href="#" class="button secondary-button" title="Browse FTP Folders">Browse & Select FTP Path</a>
+                                <img class="pb_backupbuddy_ftppicker_load" style="vertical-align: -3px; margin-left: 5px; display: none;" src="' . pb_backupbuddy::plugin_url() . '/images/loading.gif" title="Loading... This may take a few seconds...">
+                            </span>
+                            <div class="pb_backupbuddy_ftpdestination_pathpickerbox" style="margin-top: 10px; display: none;">Loading...</div>';
+}
 $settings_form->add_setting( array(
 	'type'		=>		'text',
 	'name'		=>		'path',
 	'title'		=>		__( 'Remote path (optional)', 'it-l10n-backupbuddy' ),
 	'tip'		=>		__( '[Example: /public_html/backups] - Remote path to place uploaded files into on the destination FTP server. Make sure this path is correct; if it does not exist BackupBuddy will attempt to create it. No trailing slash is needed.', 'it-l10n-backupbuddy' ),
 	'rules'		=>		'string[0-500]',
-	'after'		=>		' <span class="pb_backupbuddy_ftpdestination_pathpicker">
-							<a href="#" class="button secondary-button" title="Browse FTP Folders">Browse & Select FTP Path</a>
-							<img class="pb_backupbuddy_ftppicker_load" style="vertical-align: -3px; margin-left: 5px; display: none;" src="' . pb_backupbuddy::plugin_url() . '/images/loading.gif" title="Loading... This may take a few seconds...">
-						</span>
-						<div class="pb_backupbuddy_ftpdestination_pathpickerbox" style="margin-top: 10px; display: none;">Loading...</div>',
+	'after'		=>		$browse_and_select,
 ) );
 
 
@@ -146,14 +132,10 @@ $settings_form->add_setting( array(
 	'name'		=>		'url',
 	'title'		=>		__( 'Migration URL', 'it-l10n-backupbuddy' ) . '<br><span class="description">Optional, for migrations</span>',
 	'tip'		=>		__( 'Enter the URL corresponding to the FTP destination path. This URL must lead to the location where files uploaded to this remote destination would end up. If the destination is in a subdirectory make sure to match it in the corresponding URL.', 'it-l10n-backupbuddy' ),
-	'css'		=>		'width: 100%;',
+	'css'		=>		'width: 50%; max-width: 700px;',
 	'default'	=>		$default_url,
 	'rules'		=>		'string[0-500]',
 ) );
-
-
-
-
 
 $settings_form->add_setting( array(
 	'type'		=>		'text',
@@ -165,6 +147,17 @@ $settings_form->add_setting( array(
 	'after'		=>		' backups',
 ) );
 
+
+
+$settings_form->add_setting( array(
+	'type'		=>		'title',
+	'name'		=>		'advanced_begin',
+	'title'		=>		'<span class="dashicons dashicons-arrow-right"></span> ' . __( 'Advanced Options', 'it-l10n-backupbuddy' ),
+	'row_class'	=>		'advanced-toggle-title',
+) );
+
+
+
 $settings_form->add_setting( array(
 	'type'		=>		'select',
 	'name'		=>		'active_mode',
@@ -175,6 +168,7 @@ $settings_form->add_setting( array(
 							),
 	'tip'		=>		__('[Default: Passive] - Determines whether the FTP file transfer happens in FTP active or passive mode.  Some servers or those behind a firewall may need to use PASV, or passive mode as a workaround.', 'it-l10n-backupbuddy' ),
 	'rules'		=>		'required',
+	'row_class'	=>		'advanced-toggle',
 ) );
 
 $settings_form->add_setting( array(
@@ -186,6 +180,7 @@ $settings_form->add_setting( array(
 	'css'		=>		'',
 	'after'		=>		'<span class="description"> ' . __( 'Not supported by most servers', 'it-l10n-backupbuddy' ) . '</span>',
 	'rules'		=>		'required',
+	'row_class'	=>		'advanced-toggle',
 ) );
 
 if ( $mode !== 'edit' ) {
@@ -197,5 +192,17 @@ if ( $mode !== 'edit' ) {
 		'tip'		=>		__( '[Default: unchecked] - When checked, selecting this destination disables browsing or accessing files stored at this destination from within BackupBuddy.', 'it-l10n-backupbuddy' ),
 		'css'		=>		'',
 		'rules'		=>		'',
+		'row_class'	=>		'advanced-toggle',
 	) );
 }
+$settings_form->add_setting( array(
+	'type'		=>		'checkbox',
+	'name'		=>		'disabled',
+	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
+	'title'		=>		__( 'Disable destination', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Default: unchecked] - When checked, this destination will be disabled and unusable until re-enabled. Use this if you need to temporary turn a destination off but don\t want to delete it.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'',
+	'after'		=>		'<span class="description"> ' . __('Check to disable this destination until re-enabled.', 'it-l10n-backupbuddy' ) . '</span>',
+	'rules'		=>		'',
+	'row_class'	=>		'advanced-toggle',
+) );

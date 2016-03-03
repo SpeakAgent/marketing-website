@@ -1,5 +1,7 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
+
 // Magic migration status polling.
 /*	migrate_status()
 *	
@@ -28,6 +30,7 @@ switch( $step ) {
 		
 		pb_backupbuddy::status( 'details', 'About to load fileoptions data.' );
 		require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
+		pb_backupbuddy::status( 'details', 'Fileoptions instance #26.' );
 		$fileoptions_obj = new pb_backupbuddy_fileoptions( backupbuddy_core::getLogDirectory() . 'fileoptions/send-' . $last_migration_key . '.txt', $read_only = true, $ignore_lock = true, $create_file = false );
 		if ( true !== ( $result = $fileoptions_obj->is_ok() ) ) {
 			pb_backupbuddy::status( 'error', __('Fatal Error #9034.2342348. Unable to access fileoptions data.', 'it-l10n-backupbuddy' ) . ' Error: ' . $result );
@@ -38,7 +41,7 @@ switch( $step ) {
 		
 		$migrate_send_status = $fileoptions['status'];
 		
-		if ( $migrate_send_status == 'timeout' ) {
+		if ( $migrate_send_status == 'timeout' || $migrate_send_status == 'running' ) {
 			$status_message = 'Status: Waiting for backup to finish uploading to server...';
 			$next_step = '1';
 		} elseif ( $migrate_send_status == 'failure' ) {

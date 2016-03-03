@@ -7,6 +7,7 @@ class pb_backupbuddy_destination_sftp {
 	public static $destination_info = array(
 		'name'			=>		'sFTP',
 		'description'	=>		'Secure File Transport Protocol (over SSH) is a more secure way of sending files between servers than FTP by using SSH. Web hosting accounts are more frequently providing this feature for greater security. This implementation is fully in PHP so PHP memory limits may be a limiting factor on some servers.',
+		'category'		=>		'normal', // best, normal, legacy
 	);
 	
 	// Default settings. Should be public static for auto-merging.
@@ -20,6 +21,7 @@ class pb_backupbuddy_destination_sftp {
 		'archive_limit'	=>		0,
 		'url'			=>		'',		// optional url for migration that corresponds to this sftp/path.
 		'disable_file_management'	=>		'0',		// When 1, _manage.php will not load which renders remote file management DISABLED.
+		'disabled'					=>		'0',		// When 1, disable this destination.
 	);
 	
 	
@@ -44,6 +46,14 @@ class pb_backupbuddy_destination_sftp {
 	 *	@return		boolean						True on success, else false.
 	 */
 	public static function send( $settings = array(), $files = array(), $send_id = '' ) {
+		global $pb_backupbuddy_destination_errors;
+		if ( '1' == $settings['disabled'] ) {
+			$pb_backupbuddy_destination_errors[] = __( 'Error #48933: This destination is currently disabled. Enable it under this destination\'s Advanced Settings.', 'it-l10n-backupbuddy' );
+			return false;
+		}
+		if ( ! is_array( $files ) ) {
+			$files = array( $files );
+		}
 		
 		pb_backupbuddy::status( 'details', 'FTP class send() function started.' );
 		self::_init();
@@ -105,7 +115,7 @@ class pb_backupbuddy_destination_sftp {
 			$send_time += microtime( true );
 			$total_transfer_time += $send_time;
 			if ( $upload === false ) { // Failed sending.
-				$error_message = 'ERROR #9012 ( http://ithemes.com/codex/page/BackupBuddy:_Error_Codes#9012 ).  sFTP file upload failed. Check file permissions & disk quota.';
+				$error_message = 'ERROR #9012b ( http://ithemes.com/codex/page/BackupBuddy:_Error_Codes#9012 ).  sFTP file upload failed. Check file permissions & disk quota.';
 				pb_backupbuddy::status( 'error',  $error_message );
 				backupbuddy_core::mail_error( $error_message );
 				pb_backupbuddy::status( 'details', 'sFTP log (if available & enabled via full logging mode): `' . $sftp->getSFTPLog() . '`.' );
@@ -177,6 +187,7 @@ class pb_backupbuddy_destination_sftp {
 		// Load destination fileoptions.
 		pb_backupbuddy::status( 'details', 'About to load fileoptions data.' );
 		require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
+		pb_backupbuddy::status( 'details', 'Fileoptions instance #6.' );
 		$fileoptions_obj = new pb_backupbuddy_fileoptions( backupbuddy_core::getLogDirectory() . 'fileoptions/send-' . $send_id . '.txt', $read_only = false, $ignore_lock = false, $create_file = false );
 		if ( true !== ( $result = $fileoptions_obj->is_ok() ) ) {
 			pb_backupbuddy::status( 'error', __('Fatal Error #9034.843498. Unable to access fileoptions data.', 'it-l10n-backupbuddy' ) . ' Error: ' . $result );

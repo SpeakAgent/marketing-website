@@ -7,6 +7,7 @@ class pb_backupbuddy_destination_ftp {
 	public static $destination_info = array(
 		'name'			=>		'FTP',
 		'description'	=>		'File Transport Protocol. This is the most common way of sending larger files between servers. Most web hosting accounts provide FTP access. This common and well-known transfer method is tried and true.',
+		'category'		=>		'normal', // best, normal, legacy
 	);
 	
 	// Default settings. Should be public static for auto-merging.
@@ -22,6 +23,7 @@ class pb_backupbuddy_destination_ftp {
 		'archive_limit'	=>		0,
 		'url'			=>		'',		// optional url for migration that corresponds to this ftp/path.
 		'disable_file_management'	=>		'0',		// When 1, _manage.php will not load which renders remote file management DISABLED.
+		'disabled'					=>		'0',		// When 1, disable this destination.
 	);
 	
 	
@@ -34,6 +36,14 @@ class pb_backupbuddy_destination_ftp {
 	 *	@return		boolean						True on success, else false.
 	 */
 	public static function send( $settings = array(), $files = array(), $send_id = '' ) {
+		global $pb_backupbuddy_destination_errors;
+		if ( '1' == $settings['disabled'] ) {
+			$pb_backupbuddy_destination_errors[] = __( 'Error #48933: This destination is currently disabled. Enable it under this destination\'s Advanced Settings.', 'it-l10n-backupbuddy' );
+			return false;
+		}
+		if ( ! is_array( $files ) ) {
+			$files = array( $files );
+		}
 		
 		pb_backupbuddy::status( 'details', 'FTP class send() function started.' );
 		
@@ -198,6 +208,7 @@ class pb_backupbuddy_destination_ftp {
 		// Load destination fileoptions.
 		pb_backupbuddy::status( 'details', 'About to load fileoptions data.' );
 		require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
+		pb_backupbuddy::status( 'details', 'Fileoptions instance #13.' );
 		$fileoptions_obj = new pb_backupbuddy_fileoptions( backupbuddy_core::getLogDirectory() . 'fileoptions/send-' . $send_id . '.txt', $read_only = false, $ignore_lock = false, $create_file = false );
 		if ( true !== ( $result = $fileoptions_obj->is_ok() ) ) {
 			pb_backupbuddy::status( 'error', __('Fatal Error #9034.84838. Unable to access fileoptions data.', 'it-l10n-backupbuddy' ) . ' Error: ' . $result );
@@ -325,6 +336,7 @@ class pb_backupbuddy_destination_ftp {
 		// Load destination fileoptions.
 		pb_backupbuddy::status( 'details', 'About to load fileoptions data.' );
 		require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
+		pb_backupbuddy::status( 'details', 'Fileoptions instance #12.' );
 		$fileoptions_obj = new pb_backupbuddy_fileoptions( backupbuddy_core::getLogDirectory() . 'fileoptions/send-' . $send_id . '.txt', $read_only = false, $ignore_lock = false, $create_file = false );
 		if ( true !== ( $result = $fileoptions_obj->is_ok() ) ) {
 			pb_backupbuddy::status( 'error', __('Fatal Error #9034.72373. Unable to access fileoptions data.', 'it-l10n-backupbuddy' ) . ' Error: ' . $result );
@@ -342,7 +354,7 @@ class pb_backupbuddy_destination_ftp {
 			return 'Send details: `' . $send_response . '`. Delete details: `' . $delete_response . '`.';
 		} else {
 			$fileoptions['status'] = 'success';
-			$fileoptions['finish_time'] = time();
+			$fileoptions['finish_time'] = microtime(true);
 		}
 		
 		$fileoptions_obj->save();

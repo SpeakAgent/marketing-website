@@ -1,5 +1,6 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
 
 // Settings page backup profile editing.
 /* profile_settings()

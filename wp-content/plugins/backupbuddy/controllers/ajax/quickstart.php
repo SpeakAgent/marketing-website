@@ -1,5 +1,6 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
 
 pb_backupbuddy::$ui->ajax_header();
 pb_backupbuddy::load_style( 'thickboxed.css' );

@@ -1,5 +1,7 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
+
 // Display file listing of zip.
 /*	file_tree()
 *	
@@ -29,6 +31,7 @@ if ( file_exists( $fileoptions_file ) && ( ( time() - filemtime( $fileoptions_fi
 	}
 }
 
+pb_backupbuddy::status( 'details', 'Fileoptions instance #28.' );
 $fileoptions = new pb_backupbuddy_fileoptions( $fileoptions_file );
 
 // Either we are getting cached file tree information or we need to create afresh		

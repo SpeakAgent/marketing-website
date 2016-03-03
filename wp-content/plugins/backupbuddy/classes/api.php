@@ -24,7 +24,7 @@ class backupbuddy_api {
 	 * @return	true|string									Returns true on success running the backup, else a string error message.
 	 *
 	 */
-	public static function runBackup( $generic_type_or_profile_id = '', $triggerTitle = 'BB API', $backupMode = '', $backupSerial = '' ) {
+	public static function runBackup( $generic_type_or_profile_id_or_array = '', $triggerTitle = 'BB API', $backupMode = '', $backupSerial = '' ) {
 		self::_before();
 		return require( dirname(__FILE__) . '/api/_runBackup.php' );
 	}
@@ -42,6 +42,42 @@ class backupbuddy_api {
 	
 	
 	
+	public static function getLiveStats() {
+		self::_before();
+		return require( dirname(__FILE__) . '/api/_getLiveStats.php' );
+	}
+	
+	
+	
+	/* setLiveStatus()
+	 *
+	 * Pause/Resume BackupBuddy Stash Live status for continuous database and/or periodic scans (files).
+	 *
+	 * @param bool|string	$continuous_enabled		Continuous activity (Live DB updating). bool to pause (true) / resume (false) OR empty string '' to leave the same.
+	 * @param bool|string	$periodic_enabled		Periodic activity (file scan, db dump, cleanups, etc). bool to pause (true) / resume (false) OR empty string '' to leave the same.
+	 * @param bool			$start_run				Whether or not to start running now _IF_ unpausing from a paused state.
+	 * @return array        						Returns status array( 'continuous_status' => $continuous_status, 'periodic_status' => $periodic_status ).  1=enabled, 0=paused.
+	 */
+	public static function setLiveStatus( $pause_continuous = '', $pause_periodic = '', $start_run = true ) {
+		self::_before();
+		return require( dirname(__FILE__) . '/api/_setLiveStatus.php' );
+	} // End setLiveStatus().
+	
+	
+	
+	/* runLiveSnapshot()
+	 *
+	 * Run a Live Snapshot, including rescan prior.
+	 *
+	 * @return		bool		true on success beginning scan to snapshot or false if a scan is currently in progress and cannot be interupted.
+	 */
+	public static function runLiveSnapshot() {
+		self::_before();
+		return require( dirname(__FILE__) . '/api/_runLiveSnapshot.php' );
+	} // End runLiveSnapshot(().
+	
+	
+	
 	// backupbuddy_api::getOverview()
 	public static function getOverview() {
 		self::_before();
@@ -53,6 +89,12 @@ class backupbuddy_api {
 	public static function getSchedules() {
 		self::_before();
 		return require( dirname(__FILE__) . '/api/_getSchedules.php' );
+	}
+	
+	// NOTE: Currently only support $echo === true.
+	public static function getBackupStatus( $serial, $specialAction = '', $initRetryCount = 0, $sqlFile = '', $echo = true ) {
+		self::_before();
+		return require( dirname(__FILE__) . '/api/_getBackupStatus.php' );
 	}
 	
 	
@@ -83,8 +125,16 @@ class backupbuddy_api {
 	}
 	
 	
-	public static function getPreDeployInfo() {
+	// $sha1 = whether or not to use sha1 for file comparison. performance hit. bool or '1'/'0'.
+	public static function getPreDeployInfo( $sha1 = false ) {
 		self::_before();
+		
+		if ( '1' == $sha1 ) {
+			$sha1 = true;
+		} elseif ( '0' == $sha1 ) {
+			$sha1 = false;
+		}
+		
 		return require( dirname(__FILE__) . '/api/_getPreDeployInfo.php' );
 	}
 	

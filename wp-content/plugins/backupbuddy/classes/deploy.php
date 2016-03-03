@@ -2,7 +2,7 @@
 // Dustin Bolton 2014.
 class backupbuddy_deploy {
 	
-	private $_state = array();		// Holds current state data. Retrieve with getState() and pass onto next run in the constructor.
+	public $_state = array();		// Holds current state data. Retrieve with getState() and pass onto next run in the constructor.
 	private $_errors = array();		// Hold error strings to retrieve with getErrors().
 	
 	
@@ -11,58 +11,51 @@ class backupbuddy_deploy {
 	 *
 	 * ROLLBACK, RESTORE
 	 *
-	 * @param	string	$type			Restore type: rollback (roll back from inside WordPress), restore (importbuddy)
+	 * @param	array	$destination	Destination settings.
 	 * @param	array 	$existinData	State data from a previous instantiation. Previously returned from getState().
+	 * @param	string	$destinationID	Optional numeric ID number of this destination in the destinations setting array.
 	 *
 	 */
-	public function __construct( $apiURL, $existingState = '' ) {
+	public function __construct( $destinationSettings, $existingState = '', $destinationID = '' ) {
 		pb_backupbuddy::status( 'details', 'Constructing deploy class.' );
 		register_shutdown_function( array( &$this, 'shutdown_function' ) );
+		
+		require_once( pb_backupbuddy::plugin_path() . '/classes/remote_api.php' );
+		
+		if ( false === ( $decoded_key = backupbuddy_remote_api::key_to_array( $destinationSettings['api_key'] ) ) ) {
+			die( 'Error #848349478943747. Unable to interpret API key. Corrupted?' );
+		}
 		
 		if ( is_array( $existingState ) ) { // User passed along an existing state to resume.
 			$this->_state = $existingState;
 		} else { // Create new blank process & state.
 			$this->_state = array(
-				'apiURL' => $apiURL,
-				'startTime' => time(),
+				'apiKey' => $destinationSettings['api_key'],
+				'destination' => $decoded_key,
+				'destination_id' => $destinationID,
+				'destinationSettings' => $destinationSettings,
+				'startTime' => microtime(true),
+				'backupProfile' => '',
+				'sendTheme' => false, // Send active theme's differing files.
+				'sendChildTheme' => false, // Send active child theme's differing files.
+				'sendPlugins' => array(), // Array of pugin dirnames to send. Any not in here will be yanked out of the [push|pull]PluginFiles array in _backup-perform.php.
+				'sendMedia' => false, // Send differing media files.
+				
+				'pushThemeFiles' => array(),
+				'pushChildThemeFiles' => array(),
+				'pushPluginFiles' => array(),
+				'pushMediaFiles' => array(),
+				
+				'pullThemeFiles' => array(),
+				'pullChildThemeFiles' => array(),
+				'pullPluginFiles' => array(),
+				'pullMediaFiles' => array(),
+				
+				'pullLocalArchiveFile' => '', // Location of the archive we will be restoring once file is pulled.
 			);
 		}
 		pb_backupbuddy::status( 'details', 'Deploy class constructed.' );
 	} // End __construct().
-	
-	
-	
-	public function remoteAPI( $endpoint ) {
-		$response = wp_remote_post( $this->_state['apiURL'], array(
-			'method' => 'POST',
-			'timeout' => 10,
-			'redirection' => 5,
-			'httpversion' => '1.0',
-			'blocking' => true,
-			'headers' => array(),
-			'body' => array(
-					'backupbuddy_api' => 'true',
-					'api_key' => 'xxx',
-					'backupbuddy_version' => pb_backupbuddy::settings( 'version' ),
-					'verb' => $endpoint,
-				),
-			'cookies' => array()
-		    )
-		);
-		if ( is_wp_error( $response ) ) {
-			return $this->_error( $response->get_error_message() );
-		} else {
-			if ( null === ( $return = json_decode( $response['body'], true ) ) ) {
-				return $this->_error( 'Error #4543664: Unable to decode json response. Verify remote site API URL, API key, and that the remote site has the API enabled. Return data: `' . htmlentities( $response['body'] ) . '`.' );
-			} else {
-				if ( true !== $return['success'] ) {
-					return $this->_error( 'Error #3289379: API did not report success.' );
-				} else {
-					return $return['data'];
-				}
-			}
-		}
-	}
 	
 	
 	
@@ -74,23 +67,103 @@ class backupbuddy_deploy {
 		$this->_before( __FUNCTION__ );
 		
 		$pingTimePre = microtime(true);
-		if ( false === ( $this->_state['remoteInfo'] = $this->remoteAPI( 'getPreDeployInfo' ) ) ) {
-			return false;
+		$sha1 = false;
+		if ( isset( $this->_state['destinationSettings']['sha1'] ) ) {
+			$sha1 = $this->_state['destinationSettings']['sha1'];
 		}
+		if ( false === ( $this->_state['remoteInfo'] = backupbuddy_remote_api::remoteCall( $this->_state['destination'], 'getPreDeployInfo', array( 'sha1' => $sha1 ), $timeout = 30 ) ) ) {
+			return $this->_error( implode( ', ', backupbuddy_remote_api::getErrors() ) );
+		}
+		$this->_state['remoteInfo'] = $this->_state['remoteInfo']['data'];
 		$pingTimePost = microtime(true);
 		$this->_state['remoteInfo']['pingTime'] = $pingTimePost - $pingTimePre;
 		
 		// Calculate plugins that do not match.
-		$this->_state['sendPlugins'] = $this->calculatePluginDiff( $sourceInfo['activePlugins'], $this->_state['remoteInfo']['activePlugins'] );
+		/*
+		$this->_state['pushPluginFiles'] = $this->calculatePluginDiff( $sourceInfo['activePlugins'], $this->_state['remoteInfo']['activePlugins'] );
+		$this->_state['pullPluginFiles'] = $this->calculatePluginDiff( $this->_state['remoteInfo']['activePlugins'], $sourceInfo['activePlugins'] );
+		*/
 		
-		// Calculate themes that do not match.
-		$this->_state['sendThemeFiles'] = $this->calculateThemeDiff( $sourceInfo['themeSignatures'], $this->_state['remoteInfo']['themeSignatures'] );
+		$this->_state['pushPluginFiles'] = $this->calculateFileDiff( $sourceInfo['pluginSignatures'], $this->_state['remoteInfo']['pluginSignatures'] );
+		$this->_state['pullPluginFiles'] = $this->calculateFileDiff( $this->_state['remoteInfo']['pluginSignatures'], $sourceInfo['pluginSignatures'] );
 		
-		//unset( $this->_state['remoteInfo']['themeSignatures'] );
+		if ( $sourceInfo['activeTheme'] == $this->_state['remoteInfo']['activeTheme'] ) { // Same theme so calculate theme files that do not match.
+			$this->_state['pushThemeFiles'] = $this->calculateFileDiff( $sourceInfo['themeSignatures'], $this->_state['remoteInfo']['themeSignatures'] );
+			$this->_state['pullThemeFiles'] = $this->calculateFileDiff( $this->_state['remoteInfo']['themeSignatures'], $sourceInfo['themeSignatures'] );
+		} else {
+			$this->_state['sendTheme'] = false;
+			pb_backupbuddy::status( 'details', 'Different themes. Theme data will not be sent.' );
+		}
+		
+		// Note: child theme support added in 6.0.0.6 so must check that remote index exists.
+		if ( ( isset( $this->_state['remoteInfo']['activeChildTheme'] ) ) && ( $sourceInfo['activeChildTheme'] == $this->_state['remoteInfo']['activeChildTheme'] ) ) { // Same child theme so calculate theme files that do not match.
+			$this->_state['pushChildThemeFiles'] = $this->calculateFileDiff( $sourceInfo['childThemeSignatures'], $this->_state['remoteInfo']['childThemeSignatures'] );
+			$this->_state['pullChildThemeFiles'] = $this->calculateFileDiff( $this->_state['remoteInfo']['childThemeSignatures'], $sourceInfo['childThemeSignatures'] );
+		} else {
+			$this->_state['sendChildTheme'] = false;
+			pb_backupbuddy::status( 'details', 'Different child themes. Theme data will not be sent.' );
+		}
+		
+		// Calculate media files that do not match.
+		$this->_state['pushMediaFiles'] = $this->calculateFileDiff( $sourceInfo['mediaSignatures'], $this->_state['remoteInfo']['mediaSignatures'] ); // was calculateMediaDiff().
+		$this->_state['pullMediaFiles'] = $this->calculateFileDiff( $this->_state['remoteInfo']['mediaSignatures'], $sourceInfo['mediaSignatures'] ); // was calculateMediaDiff().
+		
+		// Store count of media files.
+		//$sourceInfo['mediaCount'] = count( $sourceInfo['mediaSignatures'] );
+		//$this->_state['remoteInfo']['mediaCount'] = count( $this->_state['remoteInfo']['mediaSignatures'] );
+		
+		unset( $sourceInfo['mediaSignatures'] );
+		unset( $sourceInfo['themeSignatures'] );
+		unset( $sourceInfo['childThemeSignatures'] );
+		unset( $sourceInfo['pluginSignatures'] );
+		unset( $this->_state['remoteInfo']['mediaSignatures'] );
+		unset( $this->_state['remoteInfo']['themeSignatures'] );
+		unset( $this->_state['remoteInfo']['childThemeSignatures'] );
+		unset( $this->_state['remoteInfo']['pluginSignatures'] );
 		return true;
 	} // End start().
 	
 	
+	public function calculateFileDiff( $sourceFileSignatures, $destinationFileSignatures ) {
+		$updateFiles = array(); // Files to send.
+		// Loop through local files to see if they differ from anything on remote.
+		foreach( $sourceFileSignatures as $file => $signature ) {
+			if ( ! isset( $destinationFileSignatures[ $file ] ) ) { // File does not exist on destination.
+				$updateFiles[] = $file;
+			} else { // File exists on remote. See if content is the same.
+				if ( ( isset( $signature['sha1'] ) && isset( $destinationFileSignatures[ $file ]['sha1'] ) ) && ( $signature['sha1'] != $destinationFileSignatures[ $file ]['sha1'] ) ) { // Hash mismatch. Needs updating.
+					$updateFiles[] = $file;
+				} elseif ( ( ! isset( $signature['sha1'] ) || !isset( $destinationFileSignatures[ $file ]['sha1'] ) ) || ( '' == $signature['sha1'] ) ) { // sha1 not calculated. size may be too large. compare size to see if changed.
+					if ( $signature['size'] != $destinationFileSignatures[ $file ]['size'] ) { // size mismatch
+						$updateFiles[] = $file;
+						//echo $signature['size'] . ' != ' . $destinationFileSignatures[ $file ]['size'];
+					}
+				}
+			}
+		}
+		return $updateFiles;
+	}
+	
+	
+	
+	public function calculateMediaDiff( $sourceFileSignatures, $destinationFileSignatures ) {
+		$updateFiles = array(); // Files to send.
+		// Loop through local files to see if they differ from anything on remote.
+		foreach( (array)$sourceFileSignatures as $file => $signature ) {
+			if ( ! isset( $destinationFileSignatures[ $file ] ) ) { // File does not exist on destination.
+				$updateFiles[] = $file;
+			} else { // File exists on remote. See if content is the same.
+				if ( $signature['modified'] != $destinationFileSignatures[ $file ]['modified'] ) { // mismatch of modified time stored in database. Needs updating.
+					$updateFiles[] = $file;
+				}
+			}
+		}
+		return $updateFiles;
+	}
+	
+	
+	
+	/*
 	public function calculateThemeDiff( $sourceThemeSignatures, $destinationThemeSignatures ) {
 		$updateThemeFiles = array(); // Theme files to send.
 		// Loop through local theme files to see if they differ from anything on remote.
@@ -105,22 +178,49 @@ class backupbuddy_deploy {
 		}
 		return $updateThemeFiles;
 	}
+	*/
+	
+	
 	
 	public function calculatePluginDiff( $sourcePlugins, $destinationPlugins ) {
+		
 		$updatePlugins = array();
+		$pluginPath = wp_normalize_path( WP_PLUGIN_DIR );
+		
 		foreach( $sourcePlugins as $sourceSlug => $sourcePlugin ) {
+			$update = false;
 			if ( ! isset( $destinationPlugins[ $sourceSlug ] ) ) { // Plugin does not exist on destination.
-				$updatePlugins[] = $sourceSlug;
+				$update = true;
 			} else { // File exists on remote. See if content is the same.
 				if ( $sourcePlugins[ $sourceSlug ]['version'] != $destinationPlugins[ $sourceSlug ]['version'] ) { // Version mismatch. Needs updating.
-					$updatePlugins[] = $sourceSlug;
+					$update = true;
 				}
 			}
+			
+			if ( true === $update ) {
+				$pluginFiles = pb_backupbuddy::$filesystem->deepglob( $pluginPath . '/' . dirname( $sourceSlug ) );
+				foreach( $pluginFiles as $pluginFileIndex => &$pluginFile ) { // Strip out leading path.
+					if ( ! is_dir( $pluginFile ) ) { // Don't send just directory. Only files within. Note: This will not send a blank directory but that should not be an issue.
+						$pluginFile = str_replace( $pluginPath, '', $pluginFile );
+					} else {
+						unset( $pluginFiles[ $pluginFileIndex ] );
+					}
+				}
+				$updatePlugins = array_merge( $updatePlugins, $pluginFiles );
+			}
 		}
+		
 		return $updatePlugins;
-	}
+		
+	} // End calculatePluginDiff).
+	
+	
 	
 	public function hashFileMap( $root ) {
+		error_log( 'BackupBuddy Error #83837833: Not currently in use.' );
+		die( 'BackupBuddy Error #83837833: Not currently in use.' );
+		
+		
 		$generate_sha1 = true;
 		
 		echo 'mem:' . memory_get_usage(true) . '<br>';
@@ -160,7 +260,7 @@ class backupbuddy_deploy {
 		echo 'mem:' . memory_get_usage(true) . '<br>';
 		echo 'filecount: ' . count( $new_files ) . '<br>';
 		print_r( $new_files );
-	} // end crcMap().
+	} // end hashFileMap().
 	
 	
 	
@@ -226,7 +326,7 @@ class backupbuddy_deploy {
 		$this->_errors[] = $message;
 		pb_backupbuddy::status( 'error', $message );
 		return false;
-	}
+	} // End _error().
 	
 	
 	
@@ -273,7 +373,7 @@ class backupbuddy_deploy {
 	 * @return	null
 	 */
 	private function _before( $functionName ) {
-		$this->_state['stepHistory'][] = array( 'function' => $functionName, 'start' => time() );
+		$this->_state['stepHistory'][] = array( 'function' => $functionName, 'start' => microtime(true) );
 		pb_backupbuddy::status( 'details', 'Starting function `' . $functionName . '`.' );
 		return;
 	} // End _before().

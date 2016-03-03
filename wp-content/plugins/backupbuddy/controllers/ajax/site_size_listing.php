@@ -1,5 +1,6 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
 
 // Display site size listing in table.
 /* site_size_listing()
@@ -23,6 +24,7 @@ if ( is_numeric( pb_backupbuddy::_GET( 'profile' ) ) ) {
 echo '<!-- profile: ' . $profile_id . ' -->';
 
 $exclusions = backupbuddy_core::get_directory_exclusions( pb_backupbuddy::$options['profiles'][ $profile_id ] );
+$exclusion_profile_name = htmlentities( pb_backupbuddy::$options['profiles'][ $profile_id ]['title'] );
 
 $result = pb_backupbuddy::$filesystem->dir_size_map( ABSPATH, ABSPATH, $exclusions, $dir_array );
 if ( 0 == $result ) {
@@ -31,6 +33,8 @@ if ( 0 == $result ) {
 }
 $total_size = pb_backupbuddy::$options['stats']['site_size'] = $result[0];
 $total_size_excluded = pb_backupbuddy::$options['stats']['site_size_excluded'] = $result[1];
+$total_count = $result[2];
+$total_count_excluded = $result[3];
 pb_backupbuddy::$options['stats']['site_size_updated'] = time();
 pb_backupbuddy::save();
 
@@ -59,7 +63,9 @@ if ( pb_backupbuddy::_GET( 'text' ) == 'true' ) {
 				<?php
 					echo '<th>', __('Directory', 'it-l10n-backupbuddy' ), '</th>',
 						 '<th>', __('Size with Children', 'it-l10n-backupbuddy' ), '</th>',
-						 '<th>', __('Size with Exclusions', 'it-l10n-backupbuddy' ), '<br><span class="description">Global defaults profile</span></th>';
+						 '<th>', __('Size with Exclusions', 'it-l10n-backupbuddy' ), '<br><span class="description">' . $exclusion_profile_name . ' profile</span></th>',
+						 '<th>', __('Children Count', 'it-l10n-backupbuddy' ), '<br><span class="description">(Files + Dirs)</span></th>',
+						 '<th>', __('Children with Exclusions', 'it-l10n-backupbuddy' ), '<br><span class="description">' . $exclusion_profile_name . ' profile</span></th>';
 				?>
 			</tr>
 		</thead>
@@ -68,7 +74,9 @@ if ( pb_backupbuddy::_GET( 'text' ) == 'true' ) {
 				<?php
 					echo '<th>', __('Directory', 'it-l10n-backupbuddy' ), '</th>',
 						 '<th>', __('Size with Children', 'it-l10n-backupbuddy' ), '</th>',
-						 '<th>', __('Size with Exclusions', 'it-l10n-backupbuddy' ), '<br><span class="description">Global defaults profile</span></th>';
+						 '<th>', __('Size with Exclusions', 'it-l10n-backupbuddy' ), '<br><span class="description">' . $exclusion_profile_name . ' profile</span></th>',
+						 '<th>', __('Children Count', 'it-l10n-backupbuddy' ), '<br><span class="description">(Files + Dirs)</span></th>',
+						 '<th>', __('Children with Exclusions', 'it-l10n-backupbuddy' ), '<br><span class="description">' . $exclusion_profile_name . ' profile</span></th>';
 				?>
 			</tr>
 		</tfoot>
@@ -78,10 +86,10 @@ if ( pb_backupbuddy::_GET( 'text' ) == 'true' ) {
 if ( pb_backupbuddy::_GET( 'text' ) == 'true' ) {
 		echo str_pad( pb_backupbuddy::$format->file_size( $total_size ), 10, ' ', STR_PAD_RIGHT ) . "\t" . str_pad( pb_backupbuddy::$format->file_size( $total_size_excluded ), 10, ' ', STR_PAD_RIGHT ) . "\t" . __( 'TOTALS', 'it-l10n-backupbuddy' ) . "\n";
 } else {
-	echo '<tr><td align="right"><b>' . __( 'TOTALS', 'it-l10n-backupbuddy' ) . ':</b></td><td><b>' . pb_backupbuddy::$format->file_size( $total_size ) . '</b></td><td><b>' . pb_backupbuddy::$format->file_size( $total_size_excluded ) . '</b></td></tr>';
+	echo '<tr><td align="right"><b>' . __( 'TOTALS', 'it-l10n-backupbuddy' ) . ':</b></td><td><b>' . pb_backupbuddy::$format->file_size( $total_size ) . '</b></td><td><b>' . pb_backupbuddy::$format->file_size( $total_size_excluded ) . '</b></td><td><b>' . $total_count . '</b></td><td><b>' . $total_count_excluded . '</b></td></tr>';
 }
 $item_count = 0;
-foreach ( $dir_array as $id => $item ) { // Each $item is in format array( TOTAL_SIZE, TOTAL_SIZE_TAKING_EXCLUSIONS_INTO_ACCOUNT );
+foreach ( $dir_array as $id => $item ) { // Each $item is in format array( TOTAL_SIZE, TOTAL_SIZE_TAKING_EXCLUSIONS_INTO_ACCOUNT, file count, file count excluded );
 	$item_count++;
 	if ( $item_count > 100 ) {
 		flush();
@@ -104,13 +112,13 @@ foreach ( $dir_array as $id => $item ) { // Each $item is in format array( TOTAL
 	if ( pb_backupbuddy::_GET( 'text' ) == 'true' ) {
 		echo str_pad( pb_backupbuddy::$format->file_size( $item[0] ), 10, ' ', STR_PAD_RIGHT ) . "\t" . str_pad( $excluded_size, 10, ' ', STR_PAD_RIGHT ) . "\t" . $id . "\n";
 	} else {
-		echo '<td>' . $id . '</td><td>' . pb_backupbuddy::$format->file_size( $item[0] ) . '</td><td>' . $excluded_size . '</td></tr>';
+		echo '<td>' . $id . '</td><td>' . pb_backupbuddy::$format->file_size( $item[0] ) . '</td><td>' . $excluded_size . '</td><td>' . $item[2] . '</td><td> ' . $item[3] . '</td></tr>';
 	}
 }
 if ( pb_backupbuddy::_GET( 'text' ) == 'true' ) {
 		echo str_pad( pb_backupbuddy::$format->file_size( $total_size ), 10, ' ', STR_PAD_RIGHT ) . "\t" . str_pad( pb_backupbuddy::$format->file_size( $total_size_excluded ), 10, ' ', STR_PAD_RIGHT ) . "\t" . __( 'TOTALS', 'it-l10n-backupbuddy' ) . "\n";
 } else {
-	echo '<tr><td align="right"><b>' . __( 'TOTALS', 'it-l10n-backupbuddy' ) . ':</b></td><td><b>' . pb_backupbuddy::$format->file_size( $total_size ) . '</b></td><td><b>' . pb_backupbuddy::$format->file_size( $total_size_excluded ) . '</b></td></tr>';
+	echo '<tr><td align="right"><b>' . __( 'TOTALS', 'it-l10n-backupbuddy' ) . ':</b></td><td><b>' . pb_backupbuddy::$format->file_size( $total_size ) . '</b></td><td><b>' . pb_backupbuddy::$format->file_size( $total_size_excluded ) . '</b></td><td><b>' . $total_count . '</b></td><td><b>' . $total_count_excluded . '</b></td></tr>';
 }
 if ( pb_backupbuddy::_GET( 'text' ) == 'true' ) {
 	echo "\n\nEXCLUSIONS (" . count( $exclusions ) . "):" . "\n" . implode( "\n", $exclusions );

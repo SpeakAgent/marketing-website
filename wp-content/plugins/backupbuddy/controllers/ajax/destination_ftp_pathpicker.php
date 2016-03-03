@@ -1,5 +1,6 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
 
 // FTP destination path picker.
 /* destination_ftp_pathpicker()

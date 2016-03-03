@@ -24,6 +24,9 @@ $this->status( 'details', 'Clearing importing BackupBuddy scheduled crons.' );
 
 // Clear out any cron hooks related to BackupBuddy for imported site. - Ron H.
 $wipe_cron_hooks = array( 
+						'backupbuddy_cron', // Only cron as of BB v6.4.0.9.
+						
+						// TODO: Remove all of these in future after v6.6.4.0.9 change is solidly adopted. Remove around v8.0?
 						pb_backupbuddy::settings( 'slug' ) . '-cron_final_cleanup',
 						pb_backupbuddy::settings( 'slug' ) . '-cron_process_backup',
 						pb_backupbuddy::settings( 'slug' ) . '-cron_dropbox_copy',
@@ -167,8 +170,8 @@ foreach ( $users as $user ) { // For each source user to migrate.
 			
 			$user_meta_rows_count = 0;
 			foreach( $usermetas as $usermeta ) {
-				$meta_key = mysql_real_escape_string( $usermeta->meta_key );
-				$meta_value = mysql_real_escape_string( $usermeta->meta_value );
+				$meta_key = backupbuddy_core::dbEscape( $usermeta->meta_key );
+				$meta_value = backupbuddy_core::dbEscape( $usermeta->meta_value );
 				$sql = "INSERT INTO `{$wpdb->base_prefix}usermeta` (user_id,meta_key,meta_value) VALUES('{$user_id}','{$meta_key}','{$meta_value}');";
 				pb_backupbuddy::status( 'details', 'Copying usermeta row. SQL query: `' . $sql . '`.' );
 				$rows_modified = $wpdb->query( $sql ); // $wpdb->base_prefix gives the network prefix.

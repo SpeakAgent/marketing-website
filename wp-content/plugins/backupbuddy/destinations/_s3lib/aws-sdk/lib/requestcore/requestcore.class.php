@@ -623,7 +623,9 @@ class RequestCore
 		curl_setopt($curl_handle, CURLOPT_URL, $this->request_url);
 		curl_setopt($curl_handle, CURLOPT_FILETIME, true);
 		curl_setopt($curl_handle, CURLOPT_FRESH_CONNECT, false);
-		curl_setopt($curl_handle, CURLOPT_CLOSEPOLICY, CURLCLOSEPOLICY_LEAST_RECENTLY_USED);
+		if ( defined( 'CURLOPT_CLOSEPOLICY' ) && is_long( CURLOPT_CLOSEPOLICY ) ) { // Not available on some systems resulting in warning. See zendesk ticket 15926. May not even be defined in 5.6+.
+			curl_setopt($curl_handle, CURLOPT_CLOSEPOLICY, CURLCLOSEPOLICY_LEAST_RECENTLY_USED);
+		}
 		curl_setopt($curl_handle, CURLOPT_MAXREDIRS, 5);
 		curl_setopt($curl_handle, CURLOPT_HEADER, true);
 		curl_setopt($curl_handle, CURLOPT_RETURNTRANSFER, true);

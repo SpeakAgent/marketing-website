@@ -1,38 +1,172 @@
 <?php
-
 class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
+	var $_methods_ran = 0;
+	var $_prev_method = '';
 	
-	function process_backup( $serial = 'blank' ) {
+	/* cron()
+	 *
+	 * Master cron handling function as of v6.4.0.9. Wraps all cron functions so we can limit to one cron run per PHP load.
+	 * Method to call such as "process_backup" will call the method in this function prefixed with an underscore
+	 * "_process_backup" (to prevent accidently directly calling).
+	 *
+	 */
+	function cron( $method, $args, $rescheduleCount = 0 ) {
+		// If trying to run live_periodic a second time, just drop it as we should not have more than one running at once.
+		if ( ( 'live_periodic' == $method ) && ( 'live_periodic' == $this->_prev_method ) ) {
+			return true;
+		}
+		
+		//error_log( 'cron:' . $method . '; args:' . print_r( $args, true ) );
+		if ( ( '1' == pb_backupbuddy::$options['limit_single_cron_per_pass'] ) && ( $this->_methods_ran > 0 ) ) { // If limiting to one cron method per PHP load AND we have already ran one method this PHP process then chunk to next run.
+			//error_log( 'reschedule' );
+			$rescheduleCount++;
+			$nextRun = time() + 1;
+			
+			if ( $rescheduleCount >= backupbuddy_constants::CRON_SINGLE_PASS_RESCHEDULE_LIMIT ) { // Safety net to prevent runaway rescheduling.
+				$message = 'Error #8399823: Max cron single pass reschedule limit of `' . backupbuddy_constants::CRON_SINGLE_PASS_RESCHEDULE_LIMIT . '` hit. Method: `' . $method . '`; Args: `' . print_r( $args, true ) . '`. Previous method: `' . $this->_prev_method . '`.';
+				pb_backupbuddy::status( 'error', $message );
+				if ( 'process_backup' == $method ) { // If backup process then log to serial log file.
+					pb_backupbuddy::status( 'error', $message, $args[0] );
+				}
+				return false;
+			}
+			
+			if ( false === backupbuddy_core::schedule_single_event( $nextRun, $method, $args, $rescheduleCount ) ) {
+				$message = 'Error #838923: Unable to reschedule cron based on setting to limit single cron per pass enabled. Method: `' . $method . '`; Args: `' . print_r( $args, true ) . '`. Reschedule count: `' . $rescheduleCount . '`. Previous method: `' . $this->_prev_method . '`.';
+				pb_backupbuddy::status( 'error', $message );
+				if ( 'process_backup' == $method ) { // If backup process then log to serial log file.
+					pb_backupbuddy::status( 'error', $message, $args[0] );
+				}
+				return false;
+			}
+			
+			$message = 'Rescheduled cron for method `' . $method . '` as setting to limit single cron per pass enabled. Details: `' . print_r( $args, true ) . '`. Reschedule count: `' . $rescheduleCount . '`. Previous method: `' . $this->_prev_method . '`.';
+			pb_backupbuddy::status( 'details', $message );
+			if ( 'process_backup' == $method ) { // If backup process then log to serial log file.
+				pb_backupbuddy::status( 'details', $message, $args[0] );
+			}
+			
+			// If user has BackupBuddy Stash Live then call cron kicker.
+			require_once( pb_backupbuddy::plugin_path() . '/destinations/live/live.php' );
+			if ( false !== backupbuddy_live::getLiveID() ) {
+				require_once( pb_backupbuddy::plugin_path() . '/destinations/stash2/init.php' );
+				pb_backupbuddy_destination_stash2::cron_kick_api( pb_backupbuddy::$options['remote_destinations'][ backupbuddy_live::getLiveID() ] );
+			}
+			
+			//error_log( 'rescheduled_cron' );
+			return true;
+		}
+		
+		$this->_methods_ran++;
+		call_user_func_array( array( &$this, '_' . $method ), $args );
+		$this->_prev_method = $method;
+		
+		return true;
+	} // End cron().
+	
+	
+	
+	/* _process_backup()
+	 *
+	 * Runs backup process behind the scenes. Used by both scheduled AND manual backups to actually do the bulk of the work.
+	 *
+	 */
+	public function _process_backup( $serial = 'blank' ) {
+		//error_log( 'process_backup' );
 		pb_backupbuddy::set_status_serial( $serial );
 		pb_backupbuddy::status( 'details', '--- New PHP process.' );
 		pb_backupbuddy::set_greedy_script_limits();
-		pb_backupbuddy::status( 'message', 'Processing cron step for serial `' . $serial . '`...' );
+		pb_backupbuddy::status( 'message', 'Running process for serial `' . $serial . '`...' );
 		
-		if ( !isset( pb_backupbuddy::$classes['backup'] ) ) {
-			require_once( pb_backupbuddy::plugin_path() . '/classes/backup.php' );
-			pb_backupbuddy::$classes['backup'] = new pb_backupbuddy_backup();
+		require_once( pb_backupbuddy::plugin_path() . '/classes/backup.php' );
+		$newBackup = new pb_backupbuddy_backup();
+		$newBackup->process_backup( $serial );
+	} // End _process_backup().
+	
+	
+	
+	public function _live() {
+		$wiggle_room = ( 15*60 ); // Seconds process is allowed to run early.
+		
+		require_once( pb_backupbuddy::plugin_path() . '/destinations/live/live_periodic.php' );
+		$state = backupbuddy_live_periodic::get_stats();
+		
+		$time_since_last_activity = microtime( true ) - $state['stats']['last_activity'];
+		
+		// If not much time has passed since last periodic activity, assume still running and relay from running.
+		if ( $time_since_last_activity < backupbuddy_constants::MINIMUM_TIME_BETWEEN_ACTIVITY_AND_PERIODIC_CRON_RUN ) { // 30min.
+			$this->_methods_ran--; // Did not waste any time so reset method ran count to allow other BB crons to run.
+			pb_backupbuddy::status( 'details', 'Not enough time elapsed since last acitivty to run Live based on MINIMUM_TIME_BETWEEN_ACTIVITY_AND_PERIODIC_CRON_RUN constant.' );
+			return;
 		}
-		pb_backupbuddy::$classes['backup']->process_backup( $serial );
-	}
-	
-	
-	
-	// Cleanup final remaining bits post backup. Handled here so log file can be accessed by AJAX temporarily after backup.
-	// Also called when finished_backup action is seen being sent to AJAX signalling we can clear it NOW since AJAX is done.
-	// Also pre_backup() of backup.php schedules this 6 hours in the future of the backup in case of failure.
-	public function final_cleanup( $serial ) {
 		
-		if ( ! class_exists( 'backupbuddy_core' ) ) {
-			require_once( pb_backupbuddy::plugin_path() . '/classes/core.php' );
+		require_once( pb_backupbuddy::plugin_path() . '/destinations/live/live.php' );
+		$liveID = backupbuddy_live::getLiveID();
+		$periodic_period = pb_backupbuddy::$options['remote_destinations'][ $liveID ]['periodic_process_period'];
+		$schedule_times = wp_get_schedules();
+		if ( ! isset( $schedule_times[ $periodic_period ] ) ) {
+			pb_backupbuddy::status( 'error', 'Error #38939844: Invalid schedule interval/period `' . $periodic_period . '`. Not found in wp_get_schedules().' );
+			$this->_methods_ran--; // Did not waste any time so reset method ran count to allow other BB crons to run.
+			return;
+		}
+		$periodic_interval = $schedule_times[ $periodic_period ]['interval'];
+		
+		// Are we trying to run before the time elapsed has exceeded the periodic interval? (Gives 15minute wiggle room buffer).
+		if ( $time_since_last_activity < ( $periodic_interval - $wiggle_room ) ) {
+			$this->_methods_ran--; // Did not waste any time so reset method ran count to allow other BB crons to run.
+			pb_backupbuddy::status( 'details', 'Not enough time elapsed since last acitivty to run Live based on settings. Last activity: `' . $state['stats']['last_activity'] . '`. Elapsed since activity: `' . $time_since_last_activity . '`. Interval: `' . $periodic_interval . '`.' );
+			return;
 		}
 		
-		backupbuddy_core::final_cleanup( $serial );
+		require_once( pb_backupbuddy::plugin_path() . '/destinations/live/live_periodic.php' );
+		backupbuddy_live_periodic::run_periodic_process(); // Run periodic process at whichever point it chooses.
+	} // End _live().
+	
+	
+	
+	public function _live_periodic( $preferredStep = '', $preferredStepArgs = array() ) {
+		require_once( pb_backupbuddy::plugin_path() . '/destinations/live/live_periodic.php' );
+		backupbuddy_live_periodic::run_periodic_process( $preferredStep, $preferredStepArgs );
+	} // End _live_periodic().
+	
+	
+	// Handles trim.
+	public function _live_after_snapshot() {
+		require_once( pb_backupbuddy::plugin_path() . '/destinations/live/live.php' );
+		return backupbuddy_live::trim_remote_archives();
+	} // End _live_after_snapshot().
+	
+	
+	/* _php_runtime_test()
+	 *
+	 * Test PHP max execution time. More reliable than reported.
+	 *
+	 */
+	public function _php_runtime_test() {
+		require_once( pb_backupbuddy::plugin_path() . '/classes/core.php' );
 		
-	} // End final_cleanup().
+		// Unschedule the runtime test since it will never complete in time.
+		$next_scheduled_time = wp_next_scheduled( 'backupbuddy_cron', array( 'php_runtime_test', array(), 0 ) );
+		backupbuddy_core::unschedule_event( $next_scheduled_time, 'backupbuddy_cron', array( 'php_runtime_test', array(), 0 ) );
+		
+		backupbuddy_core::php_runtime_test();
+	} // End _php_runtime_test().
 	
 	
 	
-	/* remote_send()
+	/* _php_runtime_test_results()
+	 *
+	 * Calculate the results of the PHP runtime test, if available.
+	 *
+	 */
+	public function _php_runtime_test_results() {
+		require_once( pb_backupbuddy::plugin_path() . '/classes/core.php' );
+		backupbuddy_core::php_runtime_test_results();
+	} // End _php_runtime_test_results().
+	
+	
+	
+	/* _remote_send()
 	 *
 	 * Advanced cron-based remote file sending.
 	 *
@@ -41,7 +175,7 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 	 * @param	string	$trigger			Trigger of this cron event. Valid values: scheduled, manual
 	 *
 	 */
-	public function remote_send( $destination_id, $backup_file, $trigger, $send_importbuddy = false, $delete_after = false ) {
+	public function _remote_send( $destination_id, $backup_file, $trigger, $send_importbuddy = false, $delete_after = false ) {
 		pb_backupbuddy::set_greedy_script_limits();
 		
 		if ( ( '' == $backup_file ) && ( $send_importbuddy ) ) {
@@ -59,13 +193,13 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 			require_once( pb_backupbuddy::plugin_path() . '/classes/core.php' );
 		}
 		backupbuddy_core::send_remote_destination( $destination_id, $backup_file, $trigger, $send_importbuddy, $delete_after );
-	} // End remote_send().
+	} // End _remote_send().
 	
 	
 	
-	/*	destination_send()
+	/*	_destination_send()
 	 *	
-	 *	Straight-forward send file(s) to a destination. Pass full array of destination settings.
+	 *	Straight-forward send file(s) to a destination. Pass full array of destination settings. Called by chunking destination init.php's.
 	 *	NOTE: DOES NOT SUPPORT MULTIPART. SEE remote_send() ABOVE!
 	 *	
 	 *	@param		array		$destination_settings		All settings for this destination for this action.
@@ -73,8 +207,7 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 	 *	@param		string		$send_id					Index ID of remote_sends associated with this send (if any).
 	 *	@return		null
 	 */
-	public function destination_send( $destination_settings, $files, $send_id = '', $delete_after = false, $identifier = '' ) {
-		
+	public function _destination_send( $destination_settings, $files, $send_id = '', $delete_after = false, $identifier = '', $isRetry = false ) {
 		pb_backupbuddy::status( 'details', 'Beginning cron destination_send. Unique ID: `' . $identifier . '`.' );
 		if ( '' != $identifier ) {
 			$lockFile = backupbuddy_core::getLogDirectory() . 'cronSend-' . $identifier . '.lock';
@@ -100,7 +233,7 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 			require_once( pb_backupbuddy::plugin_path() . '/classes/core.php' );
 		}
 		
-		if ( true === backupbuddy_core::destination_send( $destination_settings, $files, $send_id, $delete_after ) ) { // completely finished, go ahead and clean up lock file.
+		if ( true === backupbuddy_core::destination_send( $destination_settings, $files, $send_id, $delete_after, $isRetry ) ) { // completely finished, go ahead and clean up lock file.
 			/* DO not delete here as we need to keep this locked down a little longer...
 			if ( '' != $identifier ) {
 				if ( true === @unlink( $lockFile ) ) {
@@ -112,37 +245,11 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 			*/
 		}
 		
-	} // End destination_send().
+	} // End _destination_send().
 	
 	
 	
-	// TODO: Merge into v3.1 destinations system in destinations directory.
-	// Copy a remote S3 backup to local backup directory
-	// $ssl boolean
-	function process_s3_copy( $s3file, $accesskey, $secretkey, $bucket, $directory, $ssl ) {
-		pb_backupbuddy::status( 'details', 'Copying remote S3 file `' . $s3file . '` down to local.' );
-		pb_backupbuddy::set_greedy_script_limits();
-		
-		if ( ! class_exists( 'backupbuddy_core' ) ) {
-			require_once( pb_backupbuddy::plugin_path() . '/classes/core.php' );
-		}
-		
-		require_once( pb_backupbuddy::plugin_path() . '/destinations/s3/lib/s3.php');
-		$s3 = new pb_backupbuddy_S3( $accesskey, $secretkey, (bool) $ssl );
-		
-		$destination_file = backupbuddy_core::getBackupDirectory() . $s3file;
-		if ( file_exists( $destination_file ) ) {
-			$destination_file = str_replace( 'backup-', 'backup_copy_' . pb_backupbuddy::random_string( 5 ) . '-', $destination_file );
-		}
-		
-		pb_backupbuddy::status( 'details', 'About to get S3 object...' );
-		$s3->getObject($bucket, $directory . $s3file, $destination_file );
-		pb_backupbuddy::status( 'details', 'S3 object retrieved.' );
-	} // End process_s3_copy().
-	
-	
-	
-	/*	process_remote_copy()
+	/*	_process_remote_copy()
 	 *	
 	 *	Copy a file from a remote destination down to local.
 	 *	
@@ -151,7 +258,13 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 	 *	@param		$settings			array		Remote destination settings.
 	 *	@return		bool							true on success, else false.
 	 */
-	function process_remote_copy( $destination_type, $file, $settings ) {
+	function _process_remote_copy( $destination_type, $file, $settings ) {
+		if ( FALSE !== strstr( $file, '?' ) ) {
+			$url = $file;
+			$file = basename( $file );
+			$file = substr( $file, 0, strpos( $file, '?' ) );
+		}
+		
 		pb_backupbuddy::status( 'details', 'Copying remote `' . $destination_type . '` file `' . $file . '` down to local.' );
 		pb_backupbuddy::set_greedy_script_limits();
 		
@@ -165,6 +278,32 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 			$destination_file = str_replace( 'backup-', 'backup_copy_' . pb_backupbuddy::random_string( 5 ) . '-', $destination_file );
 		}
 		pb_backupbuddy::status( 'details', 'Filename of resulting local copy: `' . $destination_file . '`.' );
+		
+		if ( $destination_type == 'stash2' ) {
+			require_once( ABSPATH . 'wp-admin/includes/file.php' );
+			
+			pb_backupbuddy::status( 'details', 'About to begin downloading from URL.' );
+			$download = download_url( $url );
+			pb_backupbuddy::status( 'details', 'Download process complete.' );
+			if ( is_wp_error( $download ) ) {
+				$error = 'Error #832989323: Unable to download file `' . $file . '` from URL: `' . $url . '`. Details: `' . $download->get_error_message() . '`.';
+				pb_backupbuddy::status( 'error', $error );
+				pb_backupbuddy::alert( $error );
+				return false;
+			} else {
+				if ( false === copy( $download, $destination_file ) ) {
+					$error = 'Error #3329383: Unable to copy file from `' . $download . '` to `' . $destination_file . '`.';
+					pb_backupbuddy::status( 'error', $error );
+					pb_backupbuddy::alert( $error );
+					@unlink( $download );
+					return false;
+				} else {
+					pb_backupbuddy::status( 'details', 'File saved to `' . $destination_file . '`.' );
+					@unlink( $download );
+					return true;
+				}
+			}
+		} // end stash2.
 		
 		if ( $destination_type == 'stash' ) {
 			
@@ -224,6 +363,18 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 				pb_backupbuddy::status( 'error', 'Error #894597845. Stash copy to local FAILURE. Details: `' . print_r( $response, true ) . '`.' );
 				return false;
 			}
+		} elseif ( $destination_type == 'gdrive' ) {
+			die( 'Not implemented here.' );
+			require_once( pb_backupbuddy::plugin_path() . '/destinations/gdrive/init.php' );
+			$settings = array_merge( pb_backupbuddy_destination_gdrive::$default_settings, $settings );
+			
+			if ( true === pb_backupbuddy_destination_gdrive::getFile( $settings, $file, $destination_file ) ) { // success
+				pb_backupbuddy::status( 'details', 'Google Drive copy to local success.' );
+				return true;
+			} else { // fail
+				pb_backupbuddy::status( 'details', 'Error #2332903. Google Drive copy to local FAILURE.' );
+				return false;
+			}
 			
 		} elseif ( $destination_type == 's3' ) {
 			
@@ -242,13 +393,13 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 		}
 		
 		
-	} // End process_remote_copy().
+	} // End _process_remote_copy().
 	
 	
 	
 	// TODO: Merge into v3.1 destinations system in destinations directory.
 	// Copy Dropbox backup to local backup directory
-	function process_dropbox_copy( $destination_id, $file ) {
+	function _process_dropbox_copy( $destination_id, $file ) {
 		pb_backupbuddy::set_greedy_script_limits();
 		
 		if ( ! class_exists( 'backupbuddy_core' ) ) {
@@ -277,16 +428,17 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 	
 	
 	
-	/* process_destination_copy()
+	/* _process_destination_copy()
 	 *
 	 * Downloads a remote backup and copies it to local server.
 	 *
 	 * @param	$destination_settings		array 		Array of destination settings.
 	 * @param	$remote_file				string		Filename of file to get. Basename only.  Remote directory / paths / buckets / etc should be passed in $destination_settings info.
+	 * @param	$fileID						string		If destination uses a special file ID (eg GDrive) then pass that to destination file function instead of $remote_file. $remote_file used for calculating local filename.
 	 * @return	bool									true success, else false.
 	 *
 	 */
-	function process_destination_copy( $destination_settings, $remote_file ) {
+	function _process_destination_copy( $destination_settings, $remote_file, $fileID = '' ) {
 		
 		pb_backupbuddy::set_greedy_script_limits();
 		
@@ -299,8 +451,12 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 		$local_file = backupbuddy_core::getBackupDirectory() . basename( $remote_file );
 		if ( file_exists( basename( $local_file ) ) ) {
 			$local_file = str_replace( 'backup-', 'backup_copy_' . pb_backupbuddy::random_string( 5 ) . '-', $local_file );
+			$local_file = str_replace( 'snapshot-', 'snapshot_copy_' . pb_backupbuddy::random_string( 5 ) . '-', $local_file );
 		}
 		
+		if ( $fileID != '' ) {
+			$remote_file = $fileID;
+		}
 		if ( true === pb_backupbuddy_destinations::getFile( $destination_settings, $remote_file, $local_file ) ) {
 			pb_backupbuddy::status( 'message', 'Success copying remote file to local.' );
 			return true;
@@ -309,13 +465,13 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 			return false;
 		}
 		
-	} // End process_destination_copy().
+	} // End _process_destination_copy().
 	
 	
 	
 	// TODO: Merge into v3.1 destinations system in destinations directory.
 	// Copy Rackspace backup to local backup directory
-	function process_rackspace_copy( $rs_backup, $rs_username, $rs_api_key, $rs_container, $rs_server ) {
+	function _process_rackspace_copy( $rs_backup, $rs_username, $rs_api_key, $rs_container, $rs_server ) {
 		pb_backupbuddy::set_greedy_script_limits();
 		
 		if ( ! class_exists( 'backupbuddy_core' ) ) {
@@ -347,7 +503,7 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 	
 	// TODO: Merge into v3.1 destinations system in destinations directory.
 	// Copy FTP backup to local backup directory
-	function process_ftp_copy( $backup, $ftp_server, $ftp_username, $ftp_password, $ftp_directory, $port = '21', $ftps = '0' ) {
+	function _process_ftp_copy( $backup, $ftp_server, $ftp_username, $ftp_password, $ftp_directory, $port = '21', $ftps = '0' ) {
 		pb_backupbuddy::set_greedy_script_limits();
 		
 		if ( ! class_exists( 'backupbuddy_core' ) ) {
@@ -400,20 +556,128 @@ class pb_backupbuddy_cron extends pb_backupbuddy_croncore {
 		
 		// close this connection
 		ftp_close( $conn_id );
-	}
+	} // End _process_ftp_copy().
 	
 	
 	
-	function housekeeping() {
+	function _housekeeping() {
+		
+		require_once( pb_backupbuddy::plugin_path() . '/classes/housekeeping.php' );
+		backupbuddy_housekeeping::run_periodic();
+		
+	} // End _housekeeping().
+	
+	
+	
+	/* _scheduled_backup()
+	 *
+	 * Runs a scheduled backup.
+	 *
+	 */
+	public static function _run_scheduled_backup( $schedule_id ) {
+		
+		if ( ! is_main_site() ) { // Only run for main site or standalone. Multisite subsites do not allow schedules.
+			return;
+		}
 		
 		if ( ! class_exists( 'backupbuddy_core' ) ) {
 			require_once( pb_backupbuddy::plugin_path() . '/classes/core.php' );
 		}
 		
-		backupbuddy_core::periodic_cleanup();
+		if ( !isset( pb_backupbuddy::$options ) ) {
+			$this->load();
+		}
 		
-	} // End housekeeping().
+		
+		// Verify directories.
+		backupbuddy_core::verify_directories( $skipTempGeneration = true );
+		
+		
+		pb_backupbuddy::status( 'details', 'cron_process_scheduled_backup: ' . $schedule_id );
+		
+		
+		$preflight_message = '';
+		$preflight_checks = backupbuddy_core::preflight_check();
+		foreach( $preflight_checks as $preflight_check ) {
+			if ( $preflight_check['success'] !== true ) {
+				pb_backupbuddy::status( 'warning', $preflight_check['message'] );
+			}
+		}
+		
+		if ( isset( pb_backupbuddy::$options['schedules'][$schedule_id] ) && ( is_array( pb_backupbuddy::$options['schedules'][$schedule_id] ) ) ) {
+			
+			// If schedule is disabled then just return. Bail out!
+			if ( isset( pb_backupbuddy::$options['schedules'][$schedule_id]['on_off'] ) && ( pb_backupbuddy::$options['schedules'][$schedule_id]['on_off'] == '0' ) ) {
+				pb_backupbuddy::status( 'message', 'Schedule `' . $schedule_id . '` NOT run due to being disabled based on this schedule\'s settings.' );
+				return;
+			}
+			
+			pb_backupbuddy::$options['schedules'][$schedule_id]['last_run'] = time(); // update last run time.
+			pb_backupbuddy::save();
+			
+			
+			require_once( pb_backupbuddy::plugin_path() . '/classes/backup.php' );
+			$newBackup = new pb_backupbuddy_backup();
+			
+			
+			if ( pb_backupbuddy::$options['schedules'][$schedule_id]['delete_after'] == '1' ) {
+				$delete_after = true;
+				pb_backupbuddy::status( 'details', 'Option to delete file after successful transfer enabled.' );
+			} else {
+				$delete_after = false;
+				pb_backupbuddy::status( 'details', 'Option to delete file after successful transfer disabled.' );
+			}
+			
+			// If any remote destinations are set then add these to the steps to perform after the backup.
+			$post_backup_steps = array();
+			$destinations = explode( '|', pb_backupbuddy::$options['schedules'][$schedule_id]['remote_destinations'] );
+			$found_valid_destination = false;
+			
+			// Remove any invalid destinations from this run.
+			foreach( $destinations as $destination_index => $destination ) {
+				if ( ! isset( $destination ) || ( $destination == '' ) ) { // Remove.
+					unset( $destinations[ $destination_index ] );
+				}
+				if ( ! isset( pb_backupbuddy::$options['remote_destinations'][$destination] ) ) { // Destination ID is invalid; remove.
+					unset( $destinations[ $destination_index ] );
+				}
+			}
+			$destination_count = count( $destinations );
+			
+			$i = 0;
+			foreach( $destinations as $destination ) {
+						$i++;
+						if ( $i >= $destination_count ) { // Last destination. Delete after if enabled.
+							$this_delete_after = $delete_after;
+							pb_backupbuddy::status( 'details', 'Last destination set to send to so this file deletion will be determined by settings.' );
+						} else { // More destinations to send to. Only delete after final send.
+							$this_delete_after = false;
+							pb_backupbuddy::status( 'details', 'More destinations are set to send to so this file will not be deleted after send.' );
+						}
+						$args = array( $destination, $this_delete_after );
+						pb_backupbuddy::status( 'details', 'Adding send step with args `' . implode( ',', $args ) . '`.' );
+						array_push( $post_backup_steps, array(
+															'function'		=>		'send_remote_destination',
+															'args'			=>		$args,
+															'start_time'	=>		0,
+															'finish_time'	=>		0,
+															'attempts'		=>		0,
+														)
+									);
+						
+						$found_valid_destination = true;
+						pb_backupbuddy::status( 'details', 'Found valid destination.' );
+			}
+			
+			$profile_array = pb_backupbuddy::$options['profiles'][ pb_backupbuddy::$options['schedules'][$schedule_id]['profile'] ];
+			
+			if ( $newBackup->start_backup_process( $profile_array, 'scheduled', array(), $post_backup_steps, pb_backupbuddy::$options['schedules'][$schedule_id]['title'] ) !== true ) {
+				pb_backupbuddy::status( 'error', 'Error #4564658344443: Backup failure. See earlier logging details for more information.' );
+			}
+		}
+		pb_backupbuddy::status( 'details', 'Finished cron_process_scheduled_backup.' );
+	} // End _scheduled_backup().
 	
 	
-}
-?>
+	
+} // End class.

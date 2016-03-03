@@ -1,7 +1,7 @@
 <?php
 /*	pb_backupbuddy_textreplacebuddy class
  *	
- *	@author Dustin Bolton < http://dustinbolton.com >
+ *	@author Dustin Bolton
  *	@since 3.0.0
  *
  *	Text replacements using command line if available. There is no good way to do text replacements

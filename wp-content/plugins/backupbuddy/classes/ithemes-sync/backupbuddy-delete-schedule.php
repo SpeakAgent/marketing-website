@@ -26,7 +26,7 @@ class Ithemes_Sync_Verb_Backupbuddy_Delete_Schedule extends Ithemes_Sync_Verb {
 			return array(
 				'api' => '0',
 				'status' => 'error',
-				'message' => 'Error #32893: Failure deleting schedule.',
+				'message' => 'Error #38332493: Failure deleting schedule.',
 			);
 			
 		} else {

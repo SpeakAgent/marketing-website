@@ -23,7 +23,6 @@
 		jQuery( '.pb_backupbuddy_get_importbuddy' ).click( function(e) {
 			<?php
 			if ( pb_backupbuddy::$options['importbuddy_pass_hash'] == '' ) {
-				//echo 'alert(\'' . __( 'Please set an ImportBuddy password on the BackupBuddy Settings page to download this script. This is required to prevent unauthorized access to the script when in use.', 'it-l10n-backupbuddy' ) . '\');';
 				?>
 				
 				var password = prompt( '<?php _e( 'To download, enter a password to lock the ImportBuddy script from unauthorized access. You will be prompted for this password when you go to importbuddy.php in your browser. Since you have not defined a default password yet this will be used as your default and can be changed later from the Settings page.', 'it-l10n-backupbuddy' ); ?>' );
@@ -68,7 +67,7 @@
 						data = jQuery.trim( data );
 						jQuery( '.pb_backupbuddy_backuplist_loading' ).hide();
 						if ( data != '1' ) {
-							alert( '<?php _e('Error', 'it-l10n-backupbuddy' );?>: ' + data );
+							alert( "<?php _e('Error', 'it-l10n-backupbuddy' );?>: " + data );
 						}
 						javascript:location.reload(true);
 					}
@@ -101,7 +100,7 @@
 				function(data) {
 					data = jQuery.trim( data );
 					if ( data.charAt(0) != '1' ) {
-						alert( '<?php _e("Error starting remote send of file to migrate", 'it-l10n-backupbuddy' ); ?>:' + "\n\n" + data );
+						alert( "<?php _e("Error starting remote send of file to migrate", 'it-l10n-backupbuddy' ); ?>:" + "\n\n" + data );
 					} else {
 						if ( 'migration' == mode ) {
 							window.location.href = '<?php echo pb_backupbuddy::page_url(); ?>&destination=' + destination_id + '&destination_title=' + destination_title + '&callback_data=' + callback_data;
@@ -128,22 +127,27 @@
 </script>
 <style>
 	.backupbuddyFileTitle {
-		color: #0084CB;
+		//color: #0084CB;
+		color: #000;
 		font-size: 1.2em;
 	}
 </style>
 
 <?php
 if ( pb_backupbuddy::$options['importbuddy_pass_hash'] == '' ) { // NO HASH SET.
-	echo '<span class="pb_label pb_label">Important</span> <b>Set an ImportBuddy password on the <a href="';
-		if ( is_network_admin() ) {
-			echo network_admin_url( 'admin.php' );
-		} else {
-			echo admin_url( 'admin.php' );
-		}
-		echo '?page=pb_backupbuddy_settings">Settings</a> page before attempting to Migrate to a new server with the link in the backup list.
-	</b><br><br>';
+	$importAlert = '<span class="pb_label pb_label">Important</span> <b>Set an ImportBuddy password on the <a href="';
+	if ( is_network_admin() ) {
+		$importAlert .= network_admin_url( 'admin.php' );
+	} else {
+		$importAlert .= admin_url( 'admin.php' );
+	}
+	$importAlert .= '?page=pb_backupbuddy_settings">Settings</a> page before attempting to Migrate to a new server.</b>';
+	pb_backupbuddy::alert( $importAlert, true );
+	echo '<br>';
 }
+
+
+pb_backupbuddy::disalert( 'importbuddy_in_backup_note', __( 'TIP: An additional copy of the restore script, importbuddy.php, is also saved inside your backup zip file for your added convenience. It can be found inside the zip file at /wp-content/uploads/backupbuddy_temp/XXXXXX/importbuddy.php, replacing XXXXXX with the random characters in the backup zip filename.', 'it-l10n-backupbuddy' ) );
 ?>
 
 
@@ -204,23 +208,7 @@ require_once( '_backup_listing.php' );
 echo '<br><br>';
 
 
-//require_once( '_deployments.php' );
 
-
-
-
-
-
-
-echo '<br><br><br><br><br><br><br><br><br><br><br>';
-echo '<small>';
-if ( pb_backupbuddy::$options['importbuddy_pass_hash'] == '' ) {
-	echo '<a class="description" onclick="alert(\'' . __( 'Please set a RepairBuddy password on the BackupBuddy Settings page to download this script. This is required to prevent unauthorized access to the script when in use.', 'it-l10n-backupbuddy' ) . '\'); return false;" href="" style="text-decoration: none;" title="' . __( 'Download the troubleshooting & repair script, repairbuddy.php', 'it-l10n-backupbuddy' ) . '">';
-} else {
-	echo '<a class="description" href="' . admin_url( 'admin-ajax.php' ) . '?action=pb_backupbuddy_backupbuddy&function=repairbuddy" style="text-decoration: none;" title="' . __('Download the troubleshooting & repair script, repairbuddy.php', 'it-l10n-backupbuddy' ) . '">';
-}
-echo __( 'Download RepairBuddy troubleshooting & repair tool.', 'it-l10n-backupbuddy' ) . '</a>';
-echo '</small>';
 
 
 

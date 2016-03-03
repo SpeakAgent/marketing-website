@@ -5,6 +5,12 @@ $pb_hide_save = true;
 
 $hide_add = true;
 
+if ( ( 'add' == $mode ) || ( 'edit' == $mode ) ) {
+	echo '<br>';
+	pb_backupbuddy::alert( 'Attention: This remote destination deprecated. For the best experience please use the newer Dropbox (v2) destination. If you do not see it verify your server is running PHP v5.3 or newer.' );
+	//echo '<br><br>';
+}
+
 if ( ( $mode == 'edit' ) || ( $mode == 'add' ) ) {
 	?>
 	<script type="text/javascript">
@@ -18,9 +24,9 @@ if ( ( $mode == 'edit' ) || ( $mode == 'add' ) ) {
 	<?php
 	$memory = pb_backupbuddy_destination_dropbox::memory_guesstimate();
 	pb_backupbuddy::alert(
-		'Note: The Dropbox API limits uploads to a maximum of 150MB.  Additionally, backup files must be fully loaded into memory to transfer to Dropbox.
+		'Note: The Legacy Dropbox API used by this older destination limits uploads to a maximum of 150MB.  Additionally, backup files must be fully loaded into memory to transfer to Dropbox.
 		BackupBuddy estimates you will be able to transfer backups up to ' . round( $memory['hypothesis'], 0 ) . ' MB with your current memory limit of ' . $memory['limit'] . ' MB
-		and <a target="_new" href="https://www.dropbox.com/developers/reference/api">Dropbox\'s 150 MB limit</a>.'
+		and <a target="_blank" href="https://www.dropbox.com/developers/reference/api">Dropbox\'s 150 MB limit</a>.'
 	);
 	
 	
@@ -78,7 +84,7 @@ if ( ( $mode == 'edit' ) || ( $mode == 'add' ) ) {
 			}
 			
 			$account_info = $dropbuddy->get_account_info();
-			//echo '<div class="pb_dropbox_authorize"><a href="' . $dropbuddy->get_authorize_url() . '" class="button-primary" target="_new">Re-Authorize with Dropbox</a></div>';
+			//echo '<div class="pb_dropbox_authorize"><a href="' . $dropbuddy->get_authorize_url() . '" class="button-primary" target="_blank">Re-Authorize with Dropbox</a></div>';
 			echo '<!-- Authorized to Dropbox but not adding. -->';
 		} else {
 			//echo 'Access Denied. Did you authenticate via the URL?<br><br>';
@@ -99,7 +105,7 @@ if ( ( $mode == 'edit' ) || ( $mode == 'add' ) ) {
 					echo '<li>Return to this window and click the <b>' . __( "Yes, I've Authorized BackupBuddy with Dropbox", 'it-l10n-backupbuddy' ) . '</b> button below.</li>';
 					echo '<li>Configure the destination and click the <b>+' . __('Add Destination', 'it-l10n-backupbuddy' ) . '</b> button.</li>';
 					echo '</ol>';
-					echo '<a href="' . $dropbuddy->get_authorize_url() . '" class="button-primary pb_dropbox_authorize" target="_new">' . __('Connect to Dropbox & Authorize (opens new window)', 'it-l10n-backupbuddy' ) . '</a>';
+					echo '<a href="' . $dropbuddy->get_authorize_url() . '" class="button-primary pb_dropbox_authorize" target="_blank">' . __('Connect to Dropbox & Authorize (opens new window)', 'it-l10n-backupbuddy' ) . '</a>';
 				} else {
 					pb_backupbuddy::$options['dropboxtemptoken'] = ''; // Clear temp token.
 					pb_backupbuddy::save();
@@ -154,7 +160,7 @@ if ( $hide_add !== true ) {
 			'type'		=>		'plaintext',
 			'name'		=>		'plaintext_owner',
 			'title'		=>		__( 'Dropbox Owner', 'it-l10n-backupbuddy' ),
-			'default'	=>		$account_info['display_name'] . ' (UID: ' . $account_info['uid'] . ') [<a href="' . $account_info['referral_link'] . '" target="_new">' . __('Referral Link', 'it-l10n-backupbuddy' ) .'</a>]',
+			'default'	=>		$account_info['display_name'] . ' (UID: ' . $account_info['uid'] . ') [<a href="' . $account_info['referral_link'] . '" target="_blank">' . __('Referral Link', 'it-l10n-backupbuddy' ) .'</a>]',
 		) );
 		$settings_form->add_setting( array(
 			'type'		=>		'plaintext',
@@ -201,6 +207,18 @@ if ( $hide_add !== true ) {
 		'css'		=>		'width: 50px;',
 		'after'		=>		' backups',
 	) );
+	
+	
+	
+	$settings_form->add_setting( array(
+		'type'		=>		'title',
+		'name'		=>		'advanced_begin',
+		'title'		=>		'<span class="dashicons dashicons-arrow-right"></span> ' . __( 'Advanced Options', 'it-l10n-backupbuddy' ),
+		'row_class'	=>		'advanced-toggle-title',
+	) );
+	
+	
+	
 	if ( $mode !== 'edit' ) {
 		$settings_form->add_setting( array(
 			'type'		=>		'checkbox',
@@ -210,8 +228,20 @@ if ( $hide_add !== true ) {
 			'tip'		=>		__( '[Default: unchecked] - When checked, selecting this destination disables browsing or accessing files stored at this destination from within BackupBuddy.', 'it-l10n-backupbuddy' ),
 			'css'		=>		'',
 			'rules'		=>		'',
+			'row_class'	=>		'advanced-toggle',
 		) );
 	}
+	$settings_form->add_setting( array(
+		'type'		=>		'checkbox',
+		'name'		=>		'disabled',
+		'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
+		'title'		=>		__( 'Disable destination', 'it-l10n-backupbuddy' ),
+		'tip'		=>		__( '[Default: unchecked] - When checked, this destination will be disabled and unusable until re-enabled. Use this if you need to temporary turn a destination off but don\t want to delete it.', 'it-l10n-backupbuddy' ),
+		'css'		=>		'',
+		'after'		=>		'<span class="description"> ' . __('Check to disable this destination until re-enabled.', 'it-l10n-backupbuddy' ) . '</span>',
+		'rules'		=>		'',
+		'row_class'	=>		'advanced-toggle',
+	) );
 	
 	
 } // end if if ( $hide_add !== true ) {

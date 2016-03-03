@@ -1,5 +1,7 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
+
 // Server info page extended PHPinfo thickbox.
 
 /* phpinfo()

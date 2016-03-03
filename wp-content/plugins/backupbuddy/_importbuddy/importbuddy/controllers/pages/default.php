@@ -6,7 +6,7 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) || ( true !== PB_IMPORTBUDDY ) ) {
 
 
 /****** BEGIN AUTHENTICATION *****/
-require_once( ABSPATH . 'importbuddy/classes/auth.php' );
+//require_once( ABSPATH . 'importbuddy/classes/auth.php' );
 Auth::check();
 if ( ( true === Auth::is_authenticated() ) && ( 'login' == pb_backupbuddy::_POST( 'action' ) ) ) { // On successful login to step 0, redirect to step 1.
 	header( 'Location: ' . pb_backupbuddy::page_url() );

@@ -70,9 +70,9 @@ class pb_backupbuddy_format {
 	
 	
 	
-	/*	pluginbuddy_format->unlocalize_time()
+	/*	pluginbuddy_format->localize_time()
 	 *	
-	 *	Removes the timezone offset of a localized time display for a user.
+	 *	Localizes time for the current user for display.
 	 *	
 	 *	@param		int		$timestamp		Timestamp to remove time offset for.
 	 *	@return		int						Corrected timestamp.
@@ -208,6 +208,3 @@ class pb_backupbuddy_format {
 	
 } // End class pluginbuddy_settings.
 
-
-
-?>

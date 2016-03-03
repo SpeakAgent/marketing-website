@@ -1,5 +1,7 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
+
 $pass_hash = '';
 $password = stripslashes( pb_backupbuddy::_GET( 'p' ) );
 

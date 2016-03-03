@@ -19,7 +19,7 @@ namespace Dropbox;
  *    $appInfo = dbx\AppInfo::loadFromJsonFile(...);
  *    $clientIdentifier = "my-app/1.0";
  *    $redirectUri = "https://example.org/dropbox-auth-finish";
- *    $csrfTokenStore = new dbx\ArrayElementStore($_SESSION, 'dropbox-auth-csrf-token');
+ *    $csrfTokenStore = new dbx\ArrayEntryStore($_SESSION, 'dropbox-auth-csrf-token');
  *    return new dbx\WebAuth($appInfo, $clientIdentifier, $redirectUri, $csrfTokenStore, ...);
  * }
  *
@@ -80,7 +80,7 @@ class WebAuth extends WebAuthBase
     private $redirectUri;
 
     /**
-     * A object that lets us save the CSRF token to the user's session.  If you're using the
+     * A object that lets us save CSRF token string to the user's session.  If you're using the
      * standard PHP <code>$_SESSION</code>, you can pass in something like
      * <code>new ArrayEntryStore($_SESSION, 'dropbox-auth-csrf-token')</code>.
      *
@@ -88,7 +88,7 @@ class WebAuth extends WebAuthBase
      * the same <code>get()</code>/<code>set()</code>/<code>clear()</code> methods as
      * {@link ArrayEntryStore}.
      *
-     * @return object
+     * @return ValueStore
      */
     function getCsrfTokenStore() { return $this->csrfTokenStore; }
 
@@ -104,7 +104,7 @@ class WebAuth extends WebAuthBase
      *     See {@link getClientIdentifier()}
      * @param null|string $redirectUri
      *     See {@link getRedirectUri()}
-     * @param null|string $csrfTokenStore
+     * @param null|ValueStore $csrfTokenStore
      *     See {@link getCsrfTokenStore()}
      * @param null|string $userLocale
      *     See {@link getUserLocale()}
@@ -129,6 +129,8 @@ class WebAuth extends WebAuthBase
      * This function will also save a CSRF token using the <code>$csrfTokenStore</code> given to
      * the constructor.  This CSRF token will be checked on {@link finish()} to prevent
      * request forgery.
+     *
+     * See <a href="https://www.dropbox.com/developers/core/docs#oa2-authorize">/oauth2/authorize</a>.
      *
      * @param string|null $urlState
      *    Any data you would like to keep in the URL through the authorization process.
@@ -159,14 +161,11 @@ class WebAuth extends WebAuthBase
         return strtr(base64_encode($string), '+/', '-_');
     }
 
-    private static function decodeCsrfToken($string)
-    {
-        return base64_decode(strtr($string, '-_', '+/'));
-    }
-
     /**
      * Call this after the user has visited the authorize URL ({@link start()}), approved your app,
      * and was redirected to your redirect URI.
+     *
+     * See <a href="https://www.dropbox.com/developers/core/docs#oa2-token">/oauth2/token</a>.
      *
      * @param array $queryParams
      *    The query parameters on the GET request to your redirect URI.
@@ -201,10 +200,10 @@ class WebAuth extends WebAuthBase
         Checker::argString("queryParams['state']", $state);
 
         $error = null;
+        $errorDescription = null;
         if (isset($queryParams['error'])) {
             $error = $queryParams['error'];
             Checker::argString("queryParams['error']", $error);
-            $errorDescription = null;
             if (isset($queryParams['error_description'])) {
                 $errorDescription = $queryParams['error_description'];
                 Checker::argString("queryParams['error_description']", $errorDescription);
@@ -230,8 +229,6 @@ class WebAuth extends WebAuthBase
         if ($csrfTokenFromSession === null) {
             throw new WebAuthException_BadState();
         }
-        // Sanity check to make sure something hasn't gone terribly wrong.
-        assert(strlen($csrfTokenFromSession) > 20);
 
         $splitPos = strpos($state, "|");
         if ($splitPos === false) {

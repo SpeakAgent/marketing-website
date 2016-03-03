@@ -56,7 +56,7 @@ class pb_backupbuddy_ajaxcore {
 
 
 
-/*	class pb_backupbuddy_croncore
+/*	class backupbuddy_croncore
  *	
  *	Handles crons. Currently just reports if crons were registered and called but the callback was missing.
  *	
@@ -78,7 +78,7 @@ class pb_backupbuddy_croncore {
 	} // End __call().
 	
 	
-} // End class pb_backupbuddy_cron.
+} // End class backupbuddy_cron.
 
 
 
@@ -207,7 +207,8 @@ class pb_backupbuddy_pagescore {
 			// Display page.
 			pb_backupbuddy::load_script( 'admin.js', true );
 			pb_backupbuddy::load_style( 'admin.css', true );
-			pb_backupbuddy::load_script( 'tooltip.js', true );
+			pb_backupbuddy::load_script( 'jquery-ui-tooltip', false );
+			pb_backupbuddy::load_style( 'jQuery-ui-1.11.2.css', true );
 			echo '<div class="wrap">';
  			require_once( $page_file );
 			echo '</div>';
@@ -265,5 +266,3 @@ class pb_backupbuddy_shortcodescore {
 	
 } // End class pb_backupbuddy_shortcodes.
 
-
-?>

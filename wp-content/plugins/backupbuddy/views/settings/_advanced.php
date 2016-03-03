@@ -1,6 +1,38 @@
 <?php
 if ( !is_admin() ) { die( 'Access Denied.' ); }
+?>
 
+
+
+<script>
+	function bb_checkZipSystem() {
+		if ( jQuery( 'input#pb_backupbuddy_alternative_zip_2' ).is( ':checked' ) ) {
+			jQuery( '.bb-alternate-zip-options' ).show();
+		} else {
+			jQuery( '.bb-alternate-zip-options' ).hide();
+		}
+	}
+	jQuery(document).ready(function() {
+		
+		jQuery( 'input#pb_backupbuddy_alternative_zip_2' ).change( function(){
+			bb_checkZipSystem();
+		});
+		
+		bb_checkZipSystem(); // Run first time.
+		
+	});
+</script>
+
+
+<style>
+	.bb-alternate-zip-options {
+		display: none;
+	}
+</style>
+
+
+
+<?php
 $settings_form = new pb_backupbuddy_settings( 'advanced_settings', '', 'tab=1', 320 );
 
 
@@ -19,18 +51,32 @@ $settings_form->add_setting( array(
 	'type'		=>		'checkbox',
 	'name'		=>		'backup_reminders',
 	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
-	'title'		=>		__( 'Enable backup reminders for edits', 'it-l10n-backupbuddy' ),
+	'title'		=>		__( 'Enable backup reminders', 'it-l10n-backupbuddy' ),
 	'tip'		=>		__( '[Default: enabled] - When enabled links will be displayed upon post or page edits and during WordPress upgrades to remind and allow rapid backing up after modifications or before upgrading.', 'it-l10n-backupbuddy' ),
 	'css'		=>		'',
 	'after'		=>		'',
 	'rules'		=>		'required',
 ) );
 $settings_form->add_setting( array(
-	'type'		=>		'checkbox',
+	'type'		=>		'select',
 	'name'		=>		'archive_name_format',
-	'options'	=>		array( 'unchecked' => 'date', 'checked' => 'datetime' ),
-	'title'		=>		__( 'Add time in backup file name', 'it-l10n-backupbuddy' ),
+	'options'	=>		array(
+							'date' => 'Date only [default]',
+							'datetime' => 'Date + time (12hr format)',
+							'datetime24' => 'Date + time (24hr format)',
+							'timestamp' => 'Unix Timestamp',
+						),
+	'title'		=>		__( 'Backup file name date/time', 'it-l10n-backupbuddy' ),
 	'tip'		=>		__( '[Default: disabled (date only)] - When enabled your backup filename will display the time the backup was created in addition to the default date. This is useful when making multiple backups in a one day period.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'',
+	'rules'		=>		'required',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'checkbox',
+	'name'		=>		'archive_name_profile',
+	'options'	=>		array( 'unchecked' => 0, 'checked' => 1 ),
+	'title'		=>		__( 'Add the backup profile to backup file name', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Default: disabled] - When enabled your backup filename will display the backup profile used to initiate the backup. This is useful when making multiple backups from different profiles.', 'it-l10n-backupbuddy' ),
 	'css'		=>		'',
 	'rules'		=>		'required',
 ) );
@@ -54,20 +100,6 @@ $settings_form->add_setting( array(
 	'after'		=>		' <span style="white-space: nowrap;"><span class="description">' . __( 'Located in backup', 'it-l10n-backupbuddy' ) . ':</span>&nbsp; <span class="code" style="white-space: normal; background: #EAEAEA;"">/' . str_replace( ABSPATH, '', backupbuddy_core::getTempDirectory() ) . 'xxxxxxxxxx/importbuddy.php</span>',
 	'rules'		=>		'required',
 ) );
-$log_file = backupbuddy_core::getLogDirectory() . 'log-' . pb_backupbuddy::$options['log_serial'] . '.txt';
-$settings_form->add_setting( array(
-	'type'		=>		'select',
-	'name'		=>		'log_level',
-	'title'		=>		__('Logging Level', 'it-l10n-backupbuddy' ),
-	'options'	=>		array(
-								'0'		=>		__( 'None', 'it-l10n-backupbuddy' ),
-								'1'		=>		__( 'Errors Only', 'it-l10n-backupbuddy' ),
-								'2'		=>		__( 'Errors & Warnings', 'it-l10n-backupbuddy' ),
-								'3'		=>		__( 'Everything (troubleshooting mode)', 'it-l10n-backupbuddy' ),
-							),
-	'tip'		=>		sprintf( __('[Default: Errors Only] - This option controls how much activity is logged for records or troubleshooting. Logs may be viewed from the Logs / Other tab on the Settings page. Additionally when in Everything / Troubleshooting mode error emails will contain encrypted troubleshooting data for support. Log file: %s', 'it-l10n-backupbuddy' ), $log_file ),
-	'rules'		=>		'required',
-) );
 $settings_form->add_setting( array(
 	'type'		=>		'select',
 	'name'		=>		'default_backup_tab',
@@ -80,24 +112,159 @@ $settings_form->add_setting( array(
 	'rules'		=>		'required',
 ) );
 $settings_form->add_setting( array(
+	'type'		=>		'checkbox',
+	'name'		=>		'disable_localization',
+	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
+	'title'		=>		__( 'Disable language localization', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Default: Unchecked] When checked language localization support will be disabled. BackupBuddy will revert to full English language mode. Use this to display logs in English for support.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'',
+	'after'		=>		'<span class="description"> ' . __( 'Check to run BackupBuddy in English. This is useful for support.', 'it-l10n-backupbuddy' ) . '</span>',
+	'rules'		=>		'required',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'checkbox',
+	'name'		=>		'limit_single_cron_per_pass',
+	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
+	'title'		=>		__( 'Limit to one action per cron pass', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Default: Checked] When checked only one BackupBuddy cron action may run per PHP page load. Subsequent actions will be rescheduled for the next page load. This only impacts BackupBuddy cron actions.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'',
+	'rules'		=>		'required',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'checkbox',
+	'name'		=>		'use_internal_cron',
+	'options'	=>		array( 'unchecked' => 0, 'checked' => 1 ),
+	'title'		=>		__( 'Force internal cron', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Default: disabled] - When enabled BackupBuddy will attempt to bypass the WordPress cron in favor of its own internal cron system. This is a partial workaround only. Example use case: A web host\'s caching is blocking the wp-cron from functioning.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'',
+	'rules'		=>		'required',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'checkbox',
+	'name'		=>		'remote_send_timeout_retries',
+	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
+	'title'		=>		__( 'Retry timed out remote sends', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Default: Checked] When checked BackupBuddy will attempt ONCE at resending a timed out remote destination send.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'',
+	'after'		=>		'<span class="description"> ' . __( 'Check to re-attempt timed out sends once.', 'it-l10n-backupbuddy' ) . '</span>',
+	'rules'		=>		'required',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'checkbox',
+	'name'		=>		'hide_live',
+	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
+	'title'		=>		__( 'Hide "Stash Live" from menu', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Default: Unchecked] When checked the `Stash Live` item will be removed from the left menu. Useful for developers with clients not using this feature.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'',
+	'after'		=>		'<span class="description"> ' . __( 'Check to hide.', 'it-l10n-backupbuddy' ) . '</span>',
+	'rules'		=>		'required',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'checkbox',
+	'name'		=>		'set_greedy_execution_time',
+	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
+	'title'		=>		__( 'Attempt to override PHP max execution time', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Default: Unchecked] When checked BackupBuddy will attempt to override the default PHP maximum execution time to 7200 seconds.  Note that almost all shared hosting providers block this attempt.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'',
+	'after'		=>		'<span class="description"> ' . __( 'Check to force execution time override attempt (most hosts block this).', 'it-l10n-backupbuddy' ) . '</span>',
+	'rules'		=>		'required',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'text',
+	'name'		=>		'archive_limit_size_big',
+	'title'		=>		__('Maximum local storage usage', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__('[Example: 50000] - Maximum size (in MB) to allow BackupBuddy to use. This is a safeguard limit which should be set HIGHER than any other local archive size limits.', 'it-l10n-backupbuddy' ),
+	'rules'		=>		'required|int|int',
+	'css'		=>		'width: 75px;',
+	'after'		=>		' MB. <span class="description">0 for no limit.</span>',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'text',
+	'name'		=>		'max_execution_time',
+	'title'		=>		'<b>' . __('Maximum time per chunk', 'it-l10n-backupbuddy' ) . '</b>',
+	'tip'		=>		__('[Default: *blank*] - The maximum amount of time BackupBuddy should allow chunked proccesses to run, including database backups, BackupBuddy Stash Live, and any other chunked proccesses UNLESS that feature allows its own specific max execution time setting in its settings.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'width: 50px;',
+	'after'		=>		' sec. <span class="description"> ' . __( 'Blank for detected default:', 'it-l10n-backupbuddy' ) . ' ' . backupbuddy_core::detectMaxExecutionTime() . ' sec</span>',
+	'rules'		=>		'int',
+) );
+
+
+
+
+$settings_form->add_setting( array(
+	'type'		=>		'title',
+	'name'		=>		'title_logging',
+	'title'		=>		__( 'Logging', 'it-l10n-backupbuddy' ),
+) );
+
+
+
+$log_file = backupbuddy_core::getLogDirectory() . 'log-' . pb_backupbuddy::$options['log_serial'] . '.txt';
+$settings_form->add_setting( array(
+	'type'		=>		'select',
+	'name'		=>		'log_level',
+	'title'		=>		'<b>' . __('Logging Level', 'it-l10n-backupbuddy' ) . '</b>',
+	'options'	=>		array(
+								'0'		=>		__( 'None', 'it-l10n-backupbuddy' ),
+								'1'		=>		__( 'Errors Only (default)', 'it-l10n-backupbuddy' ),
+								'2'		=>		__( 'Errors & Warnings', 'it-l10n-backupbuddy' ),
+								'3'		=>		__( 'Everything (troubleshooting mode)', 'it-l10n-backupbuddy' ),
+							),
+	'tip'		=>		sprintf( __('[Default: Errors Only] - This option controls how much activity is logged for records or troubleshooting. Logs may be viewed from the Logs / Other tab on the Settings page. Additionally when in Everything / Troubleshooting mode error emails will contain encrypted troubleshooting data for support. Log file: %s', 'it-l10n-backupbuddy' ), $log_file ),
+	'rules'		=>		'required',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'checkbox',
+	'name'		=>		'save_backup_sum_log',
+	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
+	'title'		=>		__( 'Temporarily save full backup status logs', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Default: Checked] When checked BackupBuddy will temporarily (~10 days) save the complete full backup status log, regardless of the Logging Level setting.  This is useful for troubleshooting passed backups. View logs by hovering a backup on the Backups page and clicking "View Log".', 'it-l10n-backupbuddy' ),
+	'css'		=>		'',
+	'after'		=>		'<span class="description"> ' . __( 'Temporarily save full backup status logs.', 'it-l10n-backupbuddy' ) . '</span>',
+	'rules'		=>		'required',
+) );
+$settings_form->add_setting( array(
 	'type'		=>		'text',
 	'name'		=>		'max_site_log_size',
-	'title'		=>		__('Maximum log file size', 'it-l10n-backupbuddy' ),
+	'title'		=>		__('Maximum main log file size', 'it-l10n-backupbuddy' ),
 	'tip'		=>		__('[Default: 10 MB] - If the log file exceeds this size then it will be cleared to prevent it from using too much space.' ),
 	'rules'		=>		'required|int',
 	'css'		=>		'width: 50px;',
 	'after'		=>		' MB',
 ) );
 $settings_form->add_setting( array(
-	'type'		=>		'checkbox',
-	'name'		=>		'disable_localization',
-	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
-	'title'		=>		__( 'Disable language localization', 'it-l10n-backupbuddy' ),
-	'tip'		=>		__( '[Default: Unchecked] When checked language localization support will be disabled. BackupBuddy will revert to full English language mode. Use this to display logs in English for support.', 'it-l10n-backupbuddy' ) . '</span>',
-	'css'		=>		'',
-	'after'		=>		'<span class="description"> ' . __( 'Check to run BackupBuddy in English. This is useful for support.', 'it-l10n-backupbuddy' ) . '</span>',
-	'rules'		=>		'required',
+	'type'		=>		'text',
+	'name'		=>		'max_send_stats_days',
+	'title'		=>		__('Recent remote send stats max age', 'it-l10n-backupbuddy' ),
+	'tip'		=>		sprintf( __('[Default: Errors Only] - This option controls how much activity is logged for records or troubleshooting. Logs may be viewed from the Logs / Other tab on the Settings page. Additionally when in Everything / Troubleshooting mode error emails will contain encrypted troubleshooting data for support. Log file: %s', 'it-l10n-backupbuddy' ), $log_file ),
+	'tip'		=>		__('[Default: 7 days] - Number of days to store recently sent file statistics & logs. Valid options are 1 to 90 days.' ),
+	'css'		=>		'width: 50px;',
+	'rules'		=>		'required|int[1-90]',
+	'after'		=>		' days',
 ) );
+$settings_form->add_setting( array(
+	'type'		=>		'text',
+	'name'		=>		'max_send_stats_count',
+	'title'		=>		__('Recent remote send stats max number', 'it-l10n-backupbuddy' ),
+	'tip'		=>		sprintf( __('[Default: Errors Only] - This option controls how much activity is logged for records or troubleshooting. Logs may be viewed from the Logs / Other tab on the Settings page. Additionally when in Everything / Troubleshooting mode error emails will contain encrypted troubleshooting data for support. Log file: %s', 'it-l10n-backupbuddy' ), $log_file ),
+	'tip'		=>		__('[Default: 7 days] - Maximum number of recently sent file statistics & logs to store. Valid options are 1 to 25 sends.' ),
+	'css'		=>		'width: 50px;',
+	'rules'		=>		'required|int[1-25]',
+	'after'		=>		' sends',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'text',
+	'name'		=>		'max_notifications_age_days',
+	'title'		=>		__('Maximum days to keep recent activity', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__('[Default: 21 days] - Number of days to store recent activity notifications / audits.' ),
+	'rules'		=>		'required|int',
+	'css'		=>		'width: 50px;',
+	'after'		=>		' days',
+) );
+
+
+
+
 
 
 $settings_form->add_setting( array(
@@ -107,6 +274,21 @@ $settings_form->add_setting( array(
 ) );
 
 
+
+
+
+
+$settings_form->add_setting( array(
+	'type'		=>		'select',
+	'name'		=>		'backup_mode',
+	'title'		=>		'<b>' . __('Default global backup mode', 'it-l10n-backupbuddy' ) . '</b>',
+	'options'	=>		array(
+								'1'		=>		__( 'Classic (v1.x) - Entire backup in single PHP page load', 'it-l10n-backupbuddy' ),
+								'2'		=>		__( 'Modern (v2.x+) - Split across page loads via WP cron', 'it-l10n-backupbuddy' ),
+							),
+	'tip'		=>		__('[Default: Modern] - If you are encountering difficulty backing up due to WordPress cron, HTTP Loopbacks, or other features specific to version 2.x you can try classic mode which runs like BackupBuddy v1.x did.', 'it-l10n-backupbuddy' ),
+	'rules'		=>		'required',
+) );
 $settings_form->add_setting( array(
 	'type'		=>		'checkbox',
 	'name'		=>		'delete_archives_pre_backup',
@@ -114,7 +296,7 @@ $settings_form->add_setting( array(
 	'title'		=>		__( 'Delete all backup archives prior to backups', 'it-l10n-backupbuddy' ),
 	'tip'		=>		__( '[Default: disabled] - When enabled all local backup archives will be deleted prior to each backup. This is useful if in compatibilty mode to prevent backing up existing files.', 'it-l10n-backupbuddy' ),
 	'css'		=>		'',
-	'after'		=>		'<span class="description"> ' . __('Use is exclusions are malfunctioning or for special purposes.', 'it-l10n-backupbuddy' ) . '</span>',
+	'after'		=>		'<span class="description"> ' . __('Use if exclusions are malfunctioning or for special purposes.', 'it-l10n-backupbuddy' ) . '</span>',
 	'rules'		=>		'required',
 ) );
 $settings_form->add_setting( array(
@@ -168,16 +350,28 @@ $settings_form->add_setting( array(
 	'rules'		=>		'required',
 ) );
 $settings_form->add_setting( array(
-	'type'		=>		'select',
-	'name'		=>		'backup_mode',
-	'title'		=>		__('Default global backup mode', 'it-l10n-backupbuddy' ),
-	'options'	=>		array(
-								'1'		=>		__( 'Classic (v1.x) - Entire backup in single PHP page load', 'it-l10n-backupbuddy' ),
-								'2'		=>		__( 'Modern (v2.x+) - Split across page loads via WP cron', 'it-l10n-backupbuddy' ),
-							),
-	'tip'		=>		__('[Default: Modern] - If you are encountering difficulty backing up due to WordPress cron, HTTP Loopbacks, or other features specific to version 2.x you can try classic mode which runs like BackupBuddy v1.x did.', 'it-l10n-backupbuddy' ),
+	'type'		=>		'checkbox',
+	'name'		=>		'skip_spawn_cron_call',
+	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
+	'title'		=>		__('Skip chained spawn of cron', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__('[Default: disabled] - When skipping is enabled BackupBuddy will not call spawn_cron() in an attempt to force a single chaining of the cron process when called from a page initiated by a web user/client. Note that BackupBuddy will only chain when called by a user-accessed page, not within cron runs themselves. Chains are halted if DOING_CRON is defined to prevent potential infinite chaining loops.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'',
+	'after'		=>		'<span class="description"> ' . __( 'Check to skip chaining from web-based page loads (as applicable).', 'it-l10n-backupbuddy' ) . '</span>',
 	'rules'		=>		'required',
 ) );
+$settings_form->add_setting( array(
+	'type'		=>		'text',
+	'name'		=>		'backup_cron_passed_force_time',
+	'title'		=>		__('Force cron if behind by X seconds', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__('[Default: blank] - When in the default modern mode BackupBuddy schedules each backup step with the WordPress simulated cron. If cron steps are not running when they should and the Status Log reports steps should have run many seconds ago, this may help to force BackupBuddy to demand WordPress run the cron step now. Manual backups only; not scheduled.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'width: 50px;',
+	'after'		=>		' secs. <span class="description"> ' . __( 'Leave blank for default of no forcing.', 'it-l10n-backupbuddy' ) . '</span>',
+	'rules'		=>		'',
+) );
+
+
+
+
 
 
 
@@ -185,6 +379,24 @@ $settings_form->add_setting( array(
 	'type'		=>		'title',
 	'name'		=>		'title_database',
 	'title'		=>		__( 'Database', 'it-l10n-backupbuddy' ),
+) );
+
+
+
+
+
+
+$settings_form->add_setting( array(
+	'type'		=>		'select',
+	'name'		=>		'database_method_strategy',
+	'title'		=>		'<b>' . __('Database method strategy', 'it-l10n-backupbuddy' ) . '</b>',
+	'options'	=>		array(
+		'php'			=>		__( 'PHP-based: Supports automated chunked resuming - default', 'it-l10n-backupbuddy' ),
+		'commandline'	=>		__( 'Commandline: Fast but does not support resuming', 'it-l10n-backupbuddy' ),
+		'all'			=>		__( 'All Available: ( PHP [chunking] > Commandline via exec()  )', 'it-l10n-backupbuddy' ),
+	),
+	'tip'		=>		__('[Default: PHP-based] - Normally use PHP-based which supports chunking (as of BackupBuddy v5) to support larger databases. Commandline-based database dumps use mysqldump which is very fast and efficient but cannot be broken up into smaller steps if it is too large which could result in timeouts on larger servers.', 'it-l10n-backupbuddy' ),
+	'rules'		=>		'required',
 ) );
 $settings_form->add_setting( array(
 	'type'		=>		'checkbox',
@@ -198,18 +410,6 @@ $settings_form->add_setting( array(
 	'orientation' =>	'vertical',
 ) );
 $settings_form->add_setting( array(
-	'type'		=>		'select',
-	'name'		=>		'database_method_strategy',
-	'title'		=>		__('Database method strategy', 'it-l10n-backupbuddy' ),
-	'options'	=>		array(
-		'php'			=>		__( 'PHP-based: Supports automated chunked resuming - default', 'it-l10n-backupbuddy' ),
-		'commandline'	=>		__( 'Commandline: Fast but does not support resuming', 'it-l10n-backupbuddy' ),
-		'all'			=>		__( 'All Available: ( PHP [chunking] > Commandline via exec()  )', 'it-l10n-backupbuddy' ),
-	),
-	'tip'		=>		__('[Default: PHP-based] - Normally use PHP-based which supports chunking (as of BackupBuddy v5) to support larger databases. Commandline-based database dumps use mysqldump which is very fast and efficient but cannot be broken up into smaller steps if it is too large which could result in timeouts on larger servers.', 'it-l10n-backupbuddy' ),
-	'rules'		=>		'required',
-) );
-$settings_form->add_setting( array(
 	'type'		=>		'checkbox',
 	'name'		=>		'breakout_tables',
 	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
@@ -220,29 +420,30 @@ $settings_form->add_setting( array(
 	'rules'		=>		'required',
 ) );
 $settings_form->add_setting( array(
-	'type'		=>		'text',
-	'name'		=>		'phpmysqldump_maxrows',
-	'title'		=>		__('Compatibility mode max rows per select', 'it-l10n-backupbuddy' ),
-	'tip'		=>		__('[Default: *blank*] - When BackupBuddy is using compatibility mdoe mysql dumping (via PHP), BackupBuddy selects data from the database. Reducing this number has BackupBuddy grab smaller portions from the database at a time. Leave blank to use built in default (around 2000 rows per select).', 'it-l10n-backupbuddy' ),
-	'css'		=>		'width: 50px;',
-	'after'		=>		' rows. <span class="description"> ' . __( 'Blank for default.', 'it-l10n-backupbuddy' ) . ' (~1000 rows/select)</span>',
-	'rules'		=>		'int',
+	'type'		=>		'checkbox',
+	'name'		=>		'force_single_db_file',
+	'options'	=>		array( 'unchecked' => '1', 'checked' => '0' ),
+	'title'		=>		__( 'Use separate files per table (when possible)', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Default: enabled] When enabled, BackupBuddy will dump individual tables to their own database file (eg wp_options.sql, wp_posts.sql, etc) when possible based on other criteria such as the dump method and whether breaking out big tables is enabled.', 'it-l10n-backupbuddy' ) . '</span>',
+	'css'		=>		'',
+	'after'		=>		'<span class="description"> ' . __( 'Uncheck to force dumping all tables into a single db_1.sql file.', 'it-l10n-backupbuddy' ) . '</span>',
+	'rules'		=>		'required',
 ) );
 $settings_form->add_setting( array(
 	'type'		=>		'text',
-	'name'		=>		'max_execution_time',
-	'title'		=>		__('Maximum time per chunk', 'it-l10n-backupbuddy' ),
-	'tip'		=>		__('[Default: *blank*] - The maximum amount of time BackupBuddy should allow a database import chunk to run. BackupBuddy by default limits each chunk to your Maximum PHP runtime when using the default PHP-based method. If your database dump step is timing out then lowering this value will instruct the script to limit each `chunk` to allow it to finish within this time period. Raising this value above your servers limits will not increase or override server settings.', 'it-l10n-backupbuddy' ),
+	'name'		=>		'phpmysqldump_maxrows',
+	'title'		=>		__('Compatibility mode max rows per select', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__('[Default: *blank*] - When BackupBuddy is using compatibility mode mysql dumping (via PHP), BackupBuddy selects data from the database. Reducing this number has BackupBuddy grab smaller portions from the database at a time. Leave blank to use built in default (around 2000 rows per select).', 'it-l10n-backupbuddy' ),
 	'css'		=>		'width: 50px;',
-	'after'		=>		' sec. <span class="description"> ' . __( 'Blank for detected default.', 'it-l10n-backupbuddy' ) . ' (' . backupbuddy_core::detectMaxExecutionTime() . ' sec)</span>',
+	'after'		=>		' rows. <span class="description"> ' . __( 'Blank for default.', 'it-l10n-backupbuddy' ) . ' (~1000 rows/select)</span>',
 	'rules'		=>		'int',
 ) );
 $settings_form->add_setting( array(
 	'type'		=>		'checkbox',
 	'name'		=>		'ignore_command_length_check',
 	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
-	'title'		=>		__('Ignore command line length check results', 'it-l10n-backupbuddy' ),
-	'tip'		=>		__('[Default: disabled] - WARNING: BackupBuddy attempts to determine your system\'s maximum command line length to insure that database operation commands do not get inadvertantly cut off. On some systems it is not possible to reliably detect this information which could result infalling back into compatibility mode even though the system is capable of running in normal operational modes. This option instructs BackupBuddy to ignore the results of the command line length check.', 'it-l10n-backupbuddy' ),
+	'title'		=>		__('Skip max command line length check ', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__('[Default: disabled] - WARNING: BackupBuddy attempts to determine your system\'s maximum command line length to insure that database operation commands do not get inadvertantly cut off. On some systems it is not possible to reliably detect this information which could result in falling back into compatibility mode even though the system is capable of running in normal operational modes. This option instructs BackupBuddy to skip the command line length check.', 'it-l10n-backupbuddy' ),
 	'css'		=>		'',
 	'after'		=>		'<span class="description"> ' . __( 'Check if directed by support.', 'it-l10n-backupbuddy' ) . '</span>',
 	'rules'		=>		'required',
@@ -259,7 +460,7 @@ $settings_form->add_setting( array(
 	'type'		=>		'checkbox',
 	'name'		=>		'compression', //'profiles#0#compression',
 	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
-	'title'		=>		__( 'Enable zip compression', 'it-l10n-backupbuddy' ),
+	'title'		=>		'<b>' . __( 'Enable zip compression', 'it-l10n-backupbuddy' ) . '</b>',
 	'tip'		=>		__( '[Default: enabled] - ZIP compression decreases file sizes of stored backups. If you are encountering timeouts due to the script running too long, disabling compression may allow the process to complete faster.', 'it-l10n-backupbuddy' ),
 	'css'		=>		'',
 	'after'		=>		'<span class="description"> ' . __('Unchecking typically DOUBLES the amount of data which may be zipped up before timeouts.', 'it-l10n-backupbuddy' ) . '</span>',
@@ -268,7 +469,7 @@ $settings_form->add_setting( array(
 $settings_form->add_setting( array(
 	'type'		=>		'select',
 	'name'		=>		'zip_method_strategy',
-	'title'		=>		__('Zip method strategy', 'it-l10n-backupbuddy' ),
+	'title'		=>		'<b>' . __('Zip method strategy', 'it-l10n-backupbuddy' ) . '</b>',
 	'options'	=>		array(
 								'1'		=>		__( 'Best Available', 'it-l10n-backupbuddy' ),
 								'2'		=>		__( 'All Available', 'it-l10n-backupbuddy' ),
@@ -282,12 +483,72 @@ $settings_form->add_setting( array(
 	'type'		=>		'checkbox',
 	'name'		=>		'alternative_zip_2',
 	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
-	'title'		=>		__( 'Alternative zip system (BETA)', 'it-l10n-backupbuddy' ),
-	'tip'		=>		__( '[Default: Disabled] Use if directed by support.', 'it-l10n-backupbuddy' ) . '</span>',
+	'title'		=>		'<b>' . __( 'Alternative zip system (BETA)', 'it-l10n-backupbuddy' ) . '</b>',
+	'tip'		=>		__( '[Default: Disabled] Use if directed by support.', 'it-l10n-backupbuddy' ),
 	'css'		=>		'',
 	'after'		=>		'<span class="description"> Check if directed by support.</span>',
 	'rules'		=>		'required',
 ) );
+
+
+//if ( isset( pb_backupbuddy::$options[ 'alternative_zip_2' ] ) && ( ( '1' == pb_backupbuddy::$options[ 'alternative_zip_2' ] ) || ( true == pb_backupbuddy::$options[ 'alternative_zip_2' ] ) ) ) {
+	$settings_form->add_setting( array(
+		'type'		=>		'select',
+		'name'		=>		'zip_build_strategy',
+		'title'		=>		'<b>' . __('Zip build strategy', 'it-l10n-backupbuddy' ) . '</b>',
+		'options'	=>		array(
+									'2'		=>		__( 'Single-Burst/Single-Step', 'it-l10n-backupbuddy' ),
+									'3'		=>		__( 'Multi-Burst/Single-Step', 'it-l10n-backupbuddy' ),
+									'4'		=>		__( 'Multi-Burst/Multi-Step', 'it-l10n-backupbuddy' ),
+								),
+		'tip'		=>		__('[Default: Multi-Burst/Single-Step] - Most backups can complete the zip build with the multi-burst/single-step strategy. Single-Burst/Single-Step can give a faster build on good servers. Multi-Burst/Multi-Step is required for slow servers that timeout during the zip build.', 'it-l10n-backupbuddy' ),
+		'after'		=>		'<span class="description"> ' . __('Select Multi-Burst/Multi-Step if server timing out during zip build', 'it-l10n-backupbuddy' ) . '</span>',
+		'rules'		=>		'required',
+		'row_class'	=>		'bb-alternate-zip-options',
+	) );
+	$settings_form->add_setting( array(
+		'type'		=>		'text',
+		'name'		=>		'zip_step_period',
+		'title'		=>		'<b>' . __('Maximum time per chunk', 'it-l10n-backupbuddy' ) . '</b>',
+		'tip'		=>		__('[Default: *blank* - 30s] - The maximum amount of time BackupBuddy should allow a zip archive build to run before pausing and scheduling a continuation step. BackupBuddy by default will allow the zip archive build to run for an indefinite period until completion but some servers will prematurely timeout without notice and this can cause the zip archive build to stall. This option allows BackupBuddy to pause after the specified period and schedule a continuation step. If your zip archive build is timing out then setting a value here that is comfortably within your server timeout constraints will help your backup progress.', 'it-l10n-backupbuddy' ),
+		'css'		=>		'width: 50px;',
+		'after'		=>		' sec. <span class="description"> ' . __( 'Blank for default (30s), 0 for infinite', 'it-l10n-backupbuddy' ) . '</span>',
+		'rules'		=>		'int',
+		'row_class'	=>		'bb-alternate-zip-options',
+	) );
+	$settings_form->add_setting( array(
+		'type'		=>		'text',
+		'name'		=>		'zip_burst_gap',
+		'title'		=>		'<b>' . __('Gap between zip build bursts', 'it-l10n-backupbuddy' ) . '</b>',
+		'tip'		=>		__('[Default: *blank* - 2s] - The time gap BackupBuddy will apply between each zip archive build burst. Some servers/hosting may benefit from having a small period of time between bursts to allow the server to catch up with file based operations and/or allowing the average load over time to be reduced by spreading out cpu and disk usage. Warning - if the value is set too high some servers may prematurely timeout without notice.', 'it-l10n-backupbuddy' ),
+		'css'		=>		'width: 50px;',
+		'after'		=>		' sec. <span class="description"> ' . __( 'Blank for default (2s)', 'it-l10n-backupbuddy' ) . '</span>',
+		'rules'		=>		'int',
+		'row_class'	=>		'bb-alternate-zip-options',
+	) );
+	$settings_form->add_setting( array(
+		'type'		=>		'text',
+		'name'		=>		'zip_min_burst_content',
+		'title'		=>		'<b>' . __('Minimum content size for a single burst (MB)', 'it-l10n-backupbuddy' ) . '</b>',
+		'tip'		=>		__('[Default: 10] - The minimum content size that BackupBuddy will try for in a zip build burst. If a zip build requires multiple bursts then the actual content size for continuation burst is adaptively varied up to the limit imposd by the maximum burst content size setting.', 'it-l10n-backupbuddy' ),
+		'css'		=>		'width: 50px;',
+		'after'		=>		' MB <span class="description"> ' . __( 'Blank for default (10MB), 0 for no minimum', 'it-l10n-backupbuddy' ) . '</span>',
+		'rules'		=>		'int',
+		'row_class'	=>		'bb-alternate-zip-options',
+	) );
+	$settings_form->add_setting( array(
+		'type'		=>		'text',
+		'name'		=>		'zip_max_burst_content',
+		'title'		=>		'<b>' . __('Maximum content size for a single burst (MB)', 'it-l10n-backupbuddy' ) . '</b>',
+		'tip'		=>		__('[Default: 100] - The maximum content size that BackupBuddy will try for in a zip build burst. If a zip build requires multiple bursts then the actual content size for continuation burst is adaptively varied up to the limit imposd by the maximum burst content size setting.', 'it-l10n-backupbuddy' ),
+		'css'		=>		'width: 50px;',
+		'after'		=>		' MB <span class="description"> ' . __( 'Blank for default (100MB), 0 for no maximum', 'it-l10n-backupbuddy' ) . '</span>',
+		'rules'		=>		'int',
+		'row_class'	=>		'bb-alternate-zip-options',
+	) );
+//}
+
+
 $settings_form->add_setting( array(
 	'type'		=>		'checkbox',
 	'name'		=>		'disable_zipmethod_caching',

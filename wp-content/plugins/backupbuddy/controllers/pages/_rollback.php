@@ -3,7 +3,7 @@ pb_backupbuddy::load_script( 'rollbackEvents.js' );
 
 pb_backupbuddy::$ui->title(
 	__( 'Database Rollback', 'it-l10n-backupbuddy' ) .
-	' &nbsp;&nbsp; <a style="font-size: 0.6em;" href="#" onClick="jQuery(\'#pb_backupbuddy_status_wrap\').toggle();">Show / Hide Advanced Status Details</a>'
+	' &nbsp;&nbsp; <a style="font-size: 0.6em;" href="#" onClick="jQuery(\'#pb_backupbuddy_status_wrap\').toggle();">Display Status Log</a>'
 ); ?>
 
 <script>
@@ -28,10 +28,10 @@ function pb_status_undourl( undo_url ) {
 
 
 <?php
-echo '<div id="pb_backupbuddy_status_wrap">';
-echo pb_backupbuddy::status_box( 'Starting rollback process . . .' );
-echo '</div>';
 global $wp_version;
+echo '<div id="pb_backupbuddy_status_wrap">';
+echo pb_backupbuddy::status_box( 'Starting rollback process with BackupBuddy v' . pb_backupbuddy::settings( 'version' ) . ' using WordPress v' . $wp_version . ' on ' . PHP_OS . '...' );
+echo '</div>';
 pb_backupbuddy::status( 'details', 'BackupBuddy v' . pb_backupbuddy::settings( 'version' ) . ' using WordPress v' . $wp_version . ' on ' . PHP_OS . '.' );
 ?>
 
@@ -117,7 +117,7 @@ pb_backupbuddy::status( 'details', 'BackupBuddy v' . pb_backupbuddy::settings( '
 
 		if ( '' !== troubleURL ) {
 			// Display error in error div with class error_alert_box.
-			message = message + ' <a href="' + troubleURL + '" target="_new">Click to <b>view error details</b> in the Knowledge Base</a>';
+			message = message + ' <a href="' + troubleURL + '" target="_blank">Click to <b>view error details</b> in the Knowledge Base</a>';
 		}
 		jQuery( '.backupbuddy_error_list' ).append( '<li>' +  message + '</li>' );
 		jQuery( '.error_alert_box' ).show();
@@ -162,7 +162,7 @@ pb_backupbuddy::status( 'details', 'BackupBuddy v' . pb_backupbuddy::settings( '
 <div class="error_alert_box" style="display: none;">
 	<span class="error_alert_title">Error(s) - See Status Log for details</span>
 	<ul class="backupbuddy_error_list">
-		<!-- <li>Error #123onlyAtest: An error has happened. This is a test.</li> -->
+		<!-- <li>Error #123onlyAtest: An error has NOT happened. This is a only test.</li> -->
 	</ul>
 </div>
 

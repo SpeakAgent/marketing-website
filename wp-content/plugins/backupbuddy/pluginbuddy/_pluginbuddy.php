@@ -4,7 +4,7 @@
 
 /*	pluginbuddy class
  *	
- *	PluginBuddy.com framework for handling all plugin functioality, architecture, etc.
+ *	Framework for handling all plugin functioality, architecture, etc.
  *	$settings variable is expected to be in the same scope of this file and previously populated with all plugin settings.
  *	
  *	@author Dustin Bolton
@@ -37,7 +37,7 @@ class pb_backupbuddy {
 		'init'				=>		'',
 	);
 	private static $_page_settings;				// Holds admin page settings for adding to the admin menu on a hook later.
-	public static $_status_serial = '';		// Serial for writing the status for this page load. May be string OR array of multiple serials to write to.
+	public static $_status_serial = '';			// Serial for writing the status for this page load. String.
 	private static $_has_flushed = false;		/// Whether or not flush() has been called yet or not.
 
 	// Controller objects. See: /controllers/ directory.
@@ -173,7 +173,7 @@ class pb_backupbuddy {
 	 *	@return		string					URL for AJAX.
 	 */
 	public static function ajax_url( $tag ) {
-		return admin_url('admin-ajax.php') . '?action=pb_' . self::settings( 'slug' ) . '_backupbuddy&function=' . $tag;
+		return admin_url( 'admin-ajax.php?action=pb_' . self::settings( 'slug' ) . '_backupbuddy&function=' . $tag );
 	} // End ajax_url().
 	
 	
@@ -327,7 +327,7 @@ class pb_backupbuddy {
 	 *	
 	 *	@return		null
 	 */
-	public static function load() {
+	public static function load( $retry_db = true ) {
 		if ( defined( 'PB_STANDALONE' ) && PB_STANDALONE === true ) { // Standalone framework mode (outside WordPress).
 			// Load options from file if it exists.
 			$dat_file = ABSPATH . 'importbuddy/_settings_dat.php';
@@ -356,9 +356,17 @@ class pb_backupbuddy {
 		
 		self::$options = self::_get_option( 'pb_' . self::settings( 'slug' ) );
 		
-		// Merge defaults into temporary $options variable and save if it differs with the pre-merge options.
-		if ( empty( self::$options ) ) {
-			$options = (array)self::settings( 'default_options' );
+		// Merge defaults into temporary $options variable and save if it differs with the pre-merge options. Only retries this once.
+		if ( ( empty( self::$options ) ) && ( true === $retry_db ) ) {
+			global $wpdb;
+			// If the database goes away in the middle of a query, wait 5 seconds and try again. Otherwise, we unintentionally overwrite the settings.
+			if ( ! empty( $wpdb->last_error ) && ( FALSE !== strpos( $wpdb->last_error, "SELECT option_value FROM `$wpdb->options` WHERE option_name = 'pb_backupbuddy'" ) ) ) {
+				sleep( 5 );
+				self::load( $retry_db = false );
+				return;
+			} else {
+				$options = (array)self::settings( 'default_options' );
+			}
 		} else {
 			$options = array_merge( (array)self::settings( 'default_options' ), (array)self::$options );
 		}
@@ -390,7 +398,8 @@ class pb_backupbuddy {
 		if ( defined( 'WP_SETUP_CONFIG' ) )
 			return false;
 
-		$row = $wpdb->get_row( $wpdb->prepare( "SELECT option_value FROM $wpdb->options WHERE option_name = %s LIMIT 1", $option ) );
+		$base_prefix = $wpdb->base_prefix;
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT option_value FROM {$base_prefix}options WHERE option_name = %s LIMIT 1", $option ) );
 
 		// Has to be get_row instead of get_var because of funkiness with 0, false, null values
 		if ( is_object( $row ) ) {
@@ -469,25 +478,6 @@ class pb_backupbuddy {
 	
 	
 	
-	/*	self::reset_options()
-	 *	
-	 *	Reset plugin options to defaults passed in $settings in the init file's ( defined in pb_backupbuddy::settings( 'init' ) ) default_options section ( $settings['default_options'] ). Use with caution.
-	 *	
-	 *	@param		boolean		$verify		Must pass boolean value of true to be able to reset. Safety mechanism.
-	 *	@return		boolean					true on reset, false otherwise.
-	 */
-	public static function reset_options( $verify = false ) {
-		if ( $verify === false ) {
-			return false;
-		} else {
-			self::$options = (array)self::settings( 'default_options' );
-			self::save();
-			return true;
-		}
-	} // End reset_options().
-	
-	
-	
 	/**
 	 *	anti_directory_browsing()
 	 *
@@ -501,11 +491,12 @@ class pb_backupbuddy {
 	public static function anti_directory_browsing( $directory = '', $die_on_fail = true, $deny_all = false, $suppress_alert = false ) {
 		
 		// Check directory exists & create if it doesn't.
-		if ( !file_exists( $directory ) ) {
-			if ( self::$filesystem->mkdir( $directory ) === false ) {
+		if ( ! file_exists( $directory ) ) {
+			if ( self::$filesystem->mkdir( $directory, $mode = 0755, $recurse = true ) === false ) {
 				$error = 'Error #9002: BackupBuddy unable to create directory `' . $directory . '`. Please verify write permissions for the parent directory `' . dirname( $directory ) . '` or manually create the specified directory & set permissions.';
 				if ( $suppress_alert !== true ) {
 					self::alert( $error, true, '9002' );
+					pb_backupbuddy::status( 'error', $error );
 				}
 				if ( $die_on_fail === true ) {
 					die( $error );
@@ -519,6 +510,7 @@ class pb_backupbuddy {
 			$error = 'Error #9002d: BackupBuddy directory `' . $directory . '` is indicated as NOT being writable. Please verify write permissions for it and parent directories as applicable.';
 			if ( $suppress_alert !== true ) {
 				self::alert( $error, true, '9002' );
+				pb_backupbuddy::status( 'error', $error );
 			}
 			if ( $die_on_fail === true ) {
 				die( $error );
@@ -532,6 +524,7 @@ class pb_backupbuddy {
 		} else {
 			$deny_all = '';
 		}
+		
 		
 		$error = '';
 		
@@ -556,7 +549,7 @@ class pb_backupbuddy {
 			}
 		}
 		
-		// .htaccess
+		// .htaccess if we aren't in the importbuddy script
 		if ( ! file_exists( $directory . '/.htaccess' ) ) {
 			if ( false === @file_put_contents( $directory . '/.htaccess', 'Options -Indexes' . $deny_all ) ) {
 				$error .= 'Unable to write .htaccess file. ';
@@ -565,7 +558,9 @@ class pb_backupbuddy {
 		
 		if ( $error != '' ) { // Failure.
 			if ( true !== $suppress_alert ) {
-				self::alert( 'Error creating anti directory browsing security files in directory `' . $directory . '`. Please verify this directory\'s permissions allow writing & reading. Errors: `' . $error . '`.' );
+				$error = 'Error creating anti directory browsing security files in directory `' . $directory . '`. Please verify this directory\'s permissions allow writing & reading. Errors: `' . $error . '`.';
+				self::alert( $error );
+				pb_backupbuddy::status( 'error', $error );
 			}
 			if ( $die_on_fail === true ) {
 				die( 'Script halted for security. Please verify permissions and try again.' );
@@ -671,7 +666,7 @@ class pb_backupbuddy {
 	 *
 	 *	@param	string			$type		Valid types: error, warning, details, message
 	 *	@param	string			$text		Text message to log.
-	 *	@param	string|array	$serial		Optional. Optional unique identifier for this plugin's message. Status messages are unique per plugin so this adds an additional unique layer for retrieval.
+	 *	@param	string			$serial		Optional. Optional unique identifier for this plugin's message. Status messages are unique per plugin so this adds an additional unique layer for retrieval.
 	 *										If self::$_status_serial has been set by set_status_serial() then it will override if $serial is blank.
 	 *	@return	null
 	 */
@@ -684,11 +679,6 @@ class pb_backupbuddy {
 		if ( ( self::$_status_serial != '' ) && ( $serials == '' ) ) {
 			$serials = self::$_status_serial;
 		}
-		if ( ! is_array( $serials ) ) {
-			$serials = array( $serials );
-		}
-		
-		
 		
 		if ( defined( 'BACKUPBUDDY_WP_CLI' ) && ( true === BACKUPBUDDY_WP_CLI ) ) {
 			if ( class_exists( 'WP_CLI' ) ) {
@@ -696,64 +686,78 @@ class pb_backupbuddy {
 			}
 		}
 		
-		//$delimiter = '|~|';
-		
 		// Make sure we have a unique log serial for all logs for security.
-		if ( !isset( self::$options['log_serial'] ) || ( self::$options['log_serial'] == '' ) ) {
+		if ( ! isset( self::$options['log_serial'] ) || ( self::$options['log_serial'] == '' ) ) {
 			self::$options['log_serial'] = self::random_string( 15 );
 			self::save();
 		}
 		
-		foreach( $serials as $serial ) {
-			// Calculate log directory.
-			$log_directory = backupbuddy_core::getLogDirectory(); // Also handles when within importbuddy.
-			
-			// Determine whether writing to main file.
-			$write_main = false;
-			if ( self::$options['log_level'] == 0 ) { // No logging.
-					$write_main = false;
-			} elseif ( self::$options['log_level'] == 1 ) { // Errors only.
-				if ( $type == 'error' ) {
-					$write_main = true;
-					self::log( '[' . $serial . '] ' . $message, 'error' );
-				}
-			} else { // Everything else.
-				$write_main = true;
-				self::log( '[' . $serial . '] ' . $message, $type );
-			}
-			
-			if ( ( '' != $serial ) ) { // Has a serial so redirect log to this specific item instead of core log.
-				$main_file = $log_directory . 'status-' . $serial . '_sum_' . self::$options['log_serial'] . '.txt';
-			} else { // Normal main file.
-				$main_file = $log_directory . 'status-' . self::$options['log_serial'] . '.txt';
-			}
-			
-			// Determine whether writing to serial file. Ignores log level.
-			if ( $serial != '' ) {
-				$write_serial = true;
+		if ( ! is_array( $serials ) ) {
+			$serials = array( $serials );
+		}
+		
+		// Calculate log directory.
+		$log_directory = backupbuddy_core::getLogDirectory(); // Also handles when within importbuddy.
+		
+		// Prepare directory for log files. Return if unable to do so.
+		if ( true === self::$_skiplog ) { // bool true so skip.
+			return;
+		} elseif( false !== self::$_skiplog ) { // something other than bool false so check directory before proceeding.
+			if ( true !== self::anti_directory_browsing( $log_directory, $die_on_fail = false, $deny_all = false, $suppress_alert = true ) ) { // Unable to secure directory. Fail.
+				self::$_skiplog = true;
+				return;
 			} else {
+				self::$_skiplog = false;
+			}
+		}
+		
+		foreach( $serials as $serial ) {
+			
+			// ImportBuddy always write to main status log.
+			if ( defined( 'PB_IMPORTBUDDY' ) && ( PB_IMPORTBUDDY === true ) ) { // IMPORTBUDDY
+				
 				$write_serial = false;
-			}
-			
-			// Return if not writing to any file.
-			if ( ( $write_main !== true )  && ( $write_serial !== true ) ) {
-				return;
-			}
-			
-			// Prepare directory for log files. Return if unable to do so.
-			if ( true === self::$_skiplog ) { // bool true so skip.
-				return;
-			} elseif( false !== self::$_skiplog ) { // something other than bool false so check directory before proceeding.
-				if ( true !== self::anti_directory_browsing( $log_directory, $die_on_fail = false, $deny_all = false, $suppress_alert = true ) ) { // Unable to secure directory. Fail.
-					self::$_skiplog = true;
-					return;
-				} else {
-					self::$_skiplog = false;
+				$write_main = true;
+				$main_file = $log_directory . 'status-' . self::$options['log_serial'] . '.txt';
+				
+			} else { // STANDALONE.
+				
+				// Determine whether writing to main extraneous log file.
+				$write_main = false;
+				if ( self::$options['log_level'] == 0 ) { // No logging.
+						$write_main = false;
+				} elseif ( self::$options['log_level'] == 1 ) { // Errors only.
+					if ( $type == 'error' ) {
+						$write_main = true;
+						self::log( '[' . $serial . '] ' . $message, 'error' );
+					}
+				} else { // Everything else.
+					$write_main = true;
+					if ( is_array( $serial ) ) {
+						error_log( print_r( $serial, true ) );
+					}
+					self::log( '[' . $serial . '] ' . $message, $type );
 				}
+				
+				// Determine which normal status log files to write.
+				if ( $serial != '' ) {
+					$write_serial = true;
+					$write_main = false;
+					//error_log( 'serial: ' . $serial );
+					if ( ( false === stristr( $serial, 'remote_send-' ) ) && ( false === stristr( $serial, 'live_periodic' ) ) ) { // Only write sum file if NOT a remote send and NOT Live log.
+						$write_main = true;
+						$main_file = $log_directory . 'status-' . $serial . '_sum_' . self::$options['log_serial'] . '.txt';
+					}
+				} else {
+					$write_serial = false;
+					$write_main = false;
+				}
+				
 			}
+			
 			
 			// Function for writing actual log CSV data. Used later.
-			if ( !function_exists( 'write_status_line' ) ) {
+			if ( ! function_exists( 'write_status_line' ) ) {
 				function write_status_line( $file, $content_array, $echoNotWrite ) {
 					$writeData = json_encode( $content_array ) . PHP_EOL;
 					if ( true === $echoNotWrite ) { // echo data instead of writing to file. used by ajax when checking status log and needing to prepend before log.
@@ -772,33 +776,17 @@ class pb_backupbuddy {
 				}
 			}
 			
-			/*
-			$content_array = array(
-				pb_backupbuddy::$format->localize_time( time() ), //time(),
-				sprintf( "%01.2f", round ( microtime( true ) - self::$start_time, 2 ) ),
-				sprintf( "%01.2f", round( memory_get_peak_usage() / 1048576, 2 ) ),
-				$type,
-				str_replace( chr(9), '   ', $message ),
-			);
-			*/
-			
 			$content_array = array(
 				'event'		=> $type,
 				'time'		=> pb_backupbuddy::$format->localize_time( time() ), // Time this happened.
 				'u'			=> substr((string)microtime(), 2, 2),
 				'run'		=> sprintf( "%01.2f", round ( microtime( true ) - self::$start_time, 2 ) ), // Elapsed PHP time.
-				'mem'		=> sprintf( "%01.2f", round( memory_get_peak_usage() / 1048576, 2 ) ), // Memory used.	
+				'mem'		=> sprintf( "%01.2f", round( memory_get_usage() / 1048576, 2 ) ), // Memory used.	Pre-7.0 was: memory_get_peak_usage().
 				'data'		=> str_replace( chr(9), '   ', $message ), // Body of the message.
 			);
 			
-			global $pb_backupbuddy_js_status;
-			if ( defined( 'PB_IMPORTBUDDY' ) || ( isset( $pb_backupbuddy_js_status ) && ( $pb_backupbuddy_js_status === true ) ) ) {
-				echo '<script>pb_status_append( ' . json_encode( $content_array ) . ' );</script>' . "\n";
-				pb_backupbuddy::flush();
-			}
-			
-			/********** MAIN LOG FILE **********/
-			if ( $write_main === true ) { // WRITE TO MAIN LOG FILE.
+			/********** MAIN LOG FILE or SUM FILE **********/
+			if ( $write_main === true ) { // WRITE TO MAIN LOG FILE or SUM FILE.
 				write_status_line( $main_file, $content_array, $echoNotWrite );
 			}
 			
@@ -807,7 +795,16 @@ class pb_backupbuddy {
 				$serial_file = $log_directory . 'status-' . $serial . '_' . self::$options['log_serial'] . '.txt';
 				write_status_line( $serial_file, $content_array, $echoNotWrite );
 			}
+			
+			// Output importbuddy status log to screen.
+			global $pb_backupbuddy_js_status;
+			if ( ( defined( 'PB_IMPORTBUDDY' ) || ( isset( $pb_backupbuddy_js_status ) && ( $pb_backupbuddy_js_status === true ) ) ) && ( 'true' != pb_backupbuddy::_GET('deploy') ) ) { // If importbuddy, js mode, and not a deployment.
+				echo '<script>pb_status_append( ' . json_encode( $content_array ) . ' );</script>' . "\n";
+				pb_backupbuddy::flush();
+			}
+			
 		} // end foreach $serials.
+		
 		
 	} // End status().
 		
@@ -841,7 +838,7 @@ class pb_backupbuddy {
 		}
 		$status_file .= self::$options['log_serial'] . '.txt';
 		
-		if ( !file_exists( $status_file ) ) {
+		if ( ! file_exists( $status_file ) ) {
 			return array(); // No log.
 		}
 		
@@ -920,6 +917,8 @@ class pb_backupbuddy {
 		// Set socket timeout to requested period.
 		@ini_set( 'default_socket_timeout', $requested_socket_timeout );
 		
+		
+		pb_backupbuddy::status( 'details', 'Checking max PHP execution time settings.' );
 		// Set maximum execution time to requested period if not already better than that
 		// See if we can get a current value (of any sort)
 		if ( false === ( $original_execution_time = @ini_get( 'max_execution_time' ) ) ) {
@@ -939,9 +938,17 @@ class pb_backupbuddy {
 				self::status( 'details', __( 'Maximum PHP execution time was not modified', 'it-l10n-backupbuddy' ) );
 				self::status( 'details', sprintf( __( 'Reported PHP execution time - Configured: %1$s; Original: %2$s; Current: %3$s', 'it-l10n-backupbuddy' ), $configured_execution_time, $original_execution_time, $current_execution_time ) );
 			}
-		} else {
-			// Either not a numeric value or we need to try and increase
-			@set_time_limit( $requested_execution_time );
+		} else { // Either not a numeric value or we need to try and increase
+			
+			if ( isset( pb_backupbuddy::$options['set_greedy_execution_time'] ) && ( '1' == pb_backupbuddy::$options['set_greedy_execution_time'] ) ) {
+				if ( false === $supress_status ) {
+					self::status( 'details', sprintf( __( 'Attempting to set PHP execution time to %1$s', 'it-l10n-backupbuddy' ), $requested_execution_time ) );
+				}
+				@set_time_limit( $requested_execution_time );
+			}  elseif ( false === $supress_status ) {// end setting max execution time
+				pb_backupbuddy::status( 'details', 'Skipped attempting to override max PHP execution time based on settings.' );
+			}
+			
 			if ( false === $supress_status ) {
 				if ( false === ( $configured_execution_time = @get_cfg_var( 'max_execution_time' ) ) ) {
 					$configured_execution_time = 'Unknown';
@@ -949,10 +956,11 @@ class pb_backupbuddy {
 				if ( false === ( $current_execution_time = @ini_get( 'max_execution_time' ) ) ) {
 					$current_execution_time = 'Unknown';
 				}
-				self::status( 'details', sprintf( __( 'Attempted to set PHP execution time to %1$s', 'it-l10n-backupbuddy' ), $requested_execution_time ) );
 				self::status( 'details', sprintf( __( 'Reported PHP execution time - Configured: %1$s; Original: %2$s; Current: %3$s', 'it-l10n-backupbuddy' ), $configured_execution_time, $original_execution_time, $current_execution_time ) );
 			}
 		}
+		
+		
 		
 		
 		// Set memory_limit to either the user defined (WordPress defaulted) or over-ridden value
@@ -1071,6 +1079,20 @@ class pb_backupbuddy {
 	
 	
 	
+	 /**
+	 * pb_backupbuddy::enqueue_thickbox()
+	 *
+	 * Enqueues the required scripts / styles needed to use thickbox
+	 *
+	 * @return null
+	 */
+	public static function enqueue_thickbox() {
+		self::init_class_controller( 'ui' ); // $ui class required pages controller and may not be set up if not in our own pages.
+		return self::$ui->enqueue_thickbox();
+	} // End enqueue_thickbox
+	
+	
+	
 	/**
 	 *	self::alert()
 	 *
@@ -1081,17 +1103,17 @@ class pb_backupbuddy {
 	 *	@param		int			$error_code		OPTIONAL! Error code number to use in linking in the wiki for easy reference.
 	 *	@return		string/null					If not echoing alert then the string will be returned. When echoing there is no return.
 	 */
-	public static function alert( $message, $error = false, $error_code = '' ) {
+	public static function alert( $message, $error = false, $error_code = '', $rel_tag = '' ) {
 		self::init_class_controller( 'ui' ); // $ui class required pages controller and may not be set up if not in our own pages.
-		self::$ui->alert( $message, $error, $error_code );
+		self::$ui->alert( $message, $error, $error_code, $rel_tag );
 	} // End alert().
 	
 	
 	
 	// Dismissable alert system. Uses alert().
-	public static function disalert( $unique_id, $message ) {
+	public static function disalert( $unique_id, $message, $error = false, $more_css = '' ) {
 		self::init_class_controller( 'ui' ); // $ui class required pages controller and may not be set up if not in our own pages.
-		self::$ui->disalert( $unique_id, $message );
+		self::$ui->disalert( $unique_id, $message, $error, $more_css );
 	} // End disalert().
 	
 	
@@ -1281,14 +1303,13 @@ class pb_backupbuddy {
 	/*	self::add_cron()
 	 *	
 	 *	Registers a WordPress cron callback (technically an action). Cron action of the name $tag will call the method in /controllers/cron.php with the matching name.
-	 *	@see cron_tag().	
 	 *
 	 *	@param		string/array	$tag				Tag / slug for the cron action. If an array the first item is the tag, the second is an optional custom callback method name.
 	 *	@param		int				$priority			Integer priority number for the cron action.
 	 *	@param		int				$accepted_args		Number of arguments this action may accept in its method.
 	 *	@return		null
 	 */
-	public static function add_cron( $tag, $priority = 10, $accepted_args = 1 ) {
+	public static function add_cron( $tag, $priority = 10, $accepted_args_num = 1 ) {
 		if ( !is_object( self::$_cron ) ) { self::_init_core_controller( 'cron' ); }
 		if ( is_array( $tag ) ) { // If array then first param is tag, second param is custom callback method name.
 			$callback_method = $tag[1];
@@ -1299,21 +1320,9 @@ class pb_backupbuddy {
 				echo '{Warning: Your tag contains disallowed characters. Tag names are equal to the PHP method that is called back so they must conform to PHP method name standards. For custom callback method names use an array for the tag parameter in the form: array( \'tag\', \'callback_name\' ).}';
 			}
 		}
-		add_action( 'pb_' . self::settings( 'slug' ) . '_' . $tag, array( &self::$_cron, $callback_method ), $priority, $accepted_args );
+		add_action( self::settings( 'slug' ) . '_' . $tag, array( &self::$_cron, $callback_method ), $priority, $accepted_args_num );
 	} // End add_cron().
 	
-	
-	
-	/*	cron_tag()
-	 *	
-	 *	Returns the cron tag to use when scheduling an event.
-	 *	
-	 *	@param		string		$tag		Internal tag name to be translated (prefixes and such added).
-	 *	@return		string
-	 */
-	public static function cron_tag( $tag ) {
-		return 'pb_' . self::settings( 'slug' ) . '_' . $tag;
-	} // End cron_tag().
 	
 	
 	/*	self::add_dashboard_widget()
@@ -1441,6 +1450,11 @@ class pb_backupbuddy {
 		return wp_nonce_field( 'pb_' . self::settings( 'name' ) . '-nonce', '_wpnonce', true, $echo );
 	} // End nonce().
 	
+	
+	
+	public static function nonce_url( $bare_url ) {
+		return wp_nonce_url( $bare_url, 'pb_' . self::settings( 'name' ) . '-nonce' );
+	}
 	
 	
 	/*	self::verify_nonce()
@@ -1652,7 +1666,7 @@ class pb_backupbuddy {
 			@ini_set('zlib.output_compression', 0); // Compression could cause server to wait for page to finish before proceeding. Turn off compression.
 			self::$_has_flushed = true;
 		}
-		@ob_flush();
+		//@ob_flush();
 		flush();
 	} // End flush().
 	

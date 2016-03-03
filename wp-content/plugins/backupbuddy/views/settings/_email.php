@@ -21,6 +21,39 @@ $settings_form->add_setting( array(
 	'rules'		=>		'int',
 ) );
 
+
+$settings_form->add_setting( array(
+	'type'		=>		'text',
+	'name'		=>		'email_notify_error',
+	'title'		=>		__('Error notification recipient(s)', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__('Email address to send notifications to upon encountering any errors or problems. Use commas to separate multiple email addresses.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'width: 250px;',
+	'after'		=>		' <a href="" class="pb_backupbuddy_customize_email_error" style="text-decoration: none;">Customize Email</a> | <a href="" id="pb_backupbuddy_email_error_test" style="text-decoration: none;" title="Send a test email to the listed email address(es) to test email sending functionality.">Test</a> &nbsp;&nbsp;&nbsp; <span id="emailErrorNotifyHiddenAlert" style="display: none;"><span class="pb_label">Tip</span> ' . __( 'This is highly suggested to be notified of backup failure.', 'it-l10n-backupbuddy' ) . '</span>',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'text',
+	'name'		=>		'email_notify_error_subject',
+	'title'		=>		' ',
+	'rules'		=>		'required|string[1-500]',
+	'css'		=>		'width: 360px;',
+	'row_class'	=>		'pb_backupbuddy_customize_email_error_row',
+	'before'	=>		'<span style="display: inline-block; width: 65px;">' . __('Subject', 'it-l10n-backupbuddy' ) . ':</span>',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'textarea',
+	'name'		=>		'email_notify_error_body',
+	'title'		=>		' ',
+	'classes'	=>		'regular-text',
+	'rules'		=>		'required|string[1-500]',
+	'css'		=>		'width: 360px; height: 75px;',
+	'row_class'	=>		'pb_backupbuddy_customize_email_error_row',
+	'before'	=>		'<span style="display: inline-block; width: 65px; float: left;">' . __('Body', 'it-l10n-backupbuddy' ) . ':</span>',
+	'after'		=>		'<div style="margin-left: 65px; width: 360px;" class="description">
+							Variables: {site_url} {home_url} {backupbuddy_version} {current_datetime} {message}
+						</div>',
+) );
+
+
 $settings_form->add_setting( array(
 	'type'		=>		'text',
 	'name'		=>		'email_notify_scheduled_start',
@@ -48,7 +81,7 @@ $settings_form->add_setting( array(
 	'row_class'	=>		'pb_backupbuddy_customize_email_scheduled_start_row',
 	'before'	=>		'<span style="display: inline-block; width: 65px; float: left;">' . __('Body', 'it-l10n-backupbuddy' ) . ':</span>',
 	'after'		=>		'<div style="margin-left: 65px; width: 360px;" class="description">
-							Variables: {site_url} {backupbuddy_version} {current_datetime} {message}
+							Variables: {site_url} {home_url} {backupbuddy_version} {current_datetime} {message}
 						</div>',
 ) );
 
@@ -80,7 +113,7 @@ $settings_form->add_setting( array(
 	'row_class'	=>		'pb_backupbuddy_customize_email_scheduled_complete_row',
 	'before'	=>		'<span style="display: inline-block; width: 65px; float: left;">' . __('Body', 'it-l10n-backupbuddy' ) . ':</span>',
 	'after'		=>		'<div style="margin-left: 65px; width: 360px;" class="description">
-							Variables: {site_url} {backupbuddy_version} {current_datetime} {message}
+							Variables: {site_url} {home_url} {backupbuddy_version} {current_datetime} {message}
 							{download_link} {backup_size} {backup_type} {backup_file} {backup_serial}
 						</div>',
 ) );
@@ -113,42 +146,12 @@ $settings_form->add_setting( array(
 	'row_class'	=>		'pb_backupbuddy_customize_email_send_finish_row',
 	'before'	=>		'<span style="display: inline-block; width: 65px; float: left;">' . __('Body', 'it-l10n-backupbuddy' ) . ':</span>',
 	'after'		=>		'<div style="margin-left: 65px; width: 360px;" class="description">
-							Variables: {site_url} {backupbuddy_version} {current_datetime} {message}
-							{download_link} {backup_size} {backup_type} {backup_file} {backup_serial}
+							Variables: {site_url} {home_url} {backupbuddy_version} {current_datetime} {message}
+							{backup_size} {backup_file} {backup_serial}
 						</div>',
 ) );
 
 
-$settings_form->add_setting( array(
-	'type'		=>		'text',
-	'name'		=>		'email_notify_error',
-	'title'		=>		__('Error notification recipient(s)', 'it-l10n-backupbuddy' ),
-	'tip'		=>		__('Email address to send notifications to upon encountering any errors or problems. Use commas to separate multiple email addresses.', 'it-l10n-backupbuddy' ),
-	'css'		=>		'width: 250px;',
-	'after'		=>		' <a href="" class="pb_backupbuddy_customize_email_error" style="text-decoration: none;">Customize Email</a> | <a href="" id="pb_backupbuddy_email_error_test" style="text-decoration: none;" title="Send a test email to the listed email address(es) to test email sending functionality.">Test</a> &nbsp;&nbsp;&nbsp; <span id="emailErrorNotifyHiddenAlert" style="display: none;"><span class="pb_label">Tip</span> ' . __( 'This is highly suggested to be notified of backup failure.', 'it-l10n-backupbuddy' ) . '</span>',
-) );
-$settings_form->add_setting( array(
-	'type'		=>		'text',
-	'name'		=>		'email_notify_error_subject',
-	'title'		=>		' ',
-	'rules'		=>		'required|string[1-500]',
-	'css'		=>		'width: 360px;',
-	'row_class'	=>		'pb_backupbuddy_customize_email_error_row',
-	'before'	=>		'<span style="display: inline-block; width: 65px;">' . __('Subject', 'it-l10n-backupbuddy' ) . ':</span>',
-) );
-$settings_form->add_setting( array(
-	'type'		=>		'textarea',
-	'name'		=>		'email_notify_error_body',
-	'title'		=>		' ',
-	'classes'	=>		'regular-text',
-	'rules'		=>		'required|string[1-500]',
-	'css'		=>		'width: 360px; height: 75px;',
-	'row_class'	=>		'pb_backupbuddy_customize_email_error_row',
-	'before'	=>		'<span style="display: inline-block; width: 65px; float: left;">' . __('Body', 'it-l10n-backupbuddy' ) . ':</span>',
-	'after'		=>		'<div style="margin-left: 65px; width: 360px;" class="description">
-							Variables: {site_url} {backupbuddy_version} {current_datetime} {message}
-						</div>',
-) );
 $settings_form->add_setting( array(
 	'type'		=>		'text',
 	'name'		=>		'email_return',

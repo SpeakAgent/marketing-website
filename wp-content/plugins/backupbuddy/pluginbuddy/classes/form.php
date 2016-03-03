@@ -228,6 +228,14 @@ class pb_backupbuddy_form {
 	
 	
 	
+	public function html( $name, $html ) {
+		$this->_inputs[$name] = array(
+			'type'  => __FUNCTION__,
+			'html'  => $html,
+		);
+	}
+	
+	
 	/*	pluginbuddy_form->checkbox()
 	 *	
 	 *	Add a checkbox input.
@@ -309,7 +317,7 @@ class pb_backupbuddy_form {
 			
 		}
 		
-		$return = '<form method="post" action="' . $action_url . '" class="pb_form" id="' . $this->_prefix . $this->_form_name . '_form">';
+		$return = '<form method="post" action="' . $action_url . '" class="pb_form ' . $this->_prefix . $this->_form_name . '_form" id="' . $this->_prefix . $this->_form_name . '_form">';
 		$return .= '<input type="hidden" name="' . $this->_prefix . '" value="' . $this->_form_name . '">';
 		return $return;
 	} // End start().
@@ -470,6 +478,14 @@ class pb_backupbuddy_form {
 				//$return .= '<h4 id="' . $prefix . $name . '"' . $css . '>' . $input['value'] . '</h4>';
 				
 				
+			/********** HTML ***********/
+			
+			} elseif ( $input['type'] == 'html' ) {
+				
+				
+				$return .= $input['html'];
+				
+			
 			/********** TEXTAREA **********/
 			} elseif ( $input['type'] == 'textarea' ) {
 				
@@ -789,6 +805,3 @@ class pb_backupbuddy_form {
 	
 } // End class pluginbuddy_form
 
-
-
-?>

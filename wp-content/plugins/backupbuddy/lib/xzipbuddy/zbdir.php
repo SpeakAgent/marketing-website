@@ -286,7 +286,7 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 		 *	@return		object					Reference to this object
 		 *
 		 */
-		public function add_pattern( array $xclusions = array(), $auto_delimit = NULL ) {
+		public function add_pattern( array $xclusions = array(), $auto_delimit = null ) {
 			
 			$add_delimiter = ( is_bool( $auto_delimit ) ) ? $auto_delimit : $this->_pattern_auto_delimit ;
 		
@@ -610,9 +610,9 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 		protected $_items = array();
 		protected $_root = '';
 		protected $_path = '';
-		protected $_exclusions_handler = NULL;
-		protected $_inclusions_handler = NULL;
-		protected $_visitor = NULL;
+		protected $_exclusions_handler = null;
+		protected $_inclusions_handler = null;
+		protected $_visitor = null;
 		protected $_ignore_symlinks = true;
 		protected $_in_exclusion_zone = false;
 		protected $_keep = false;
@@ -671,7 +671,7 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 		 *	@return		none
 		 *
 		 */
-		public function __construct( $root = '', $path = '', $exclusions_handler = NULL, $inclusions_handler = NULL, $visitor = NULL, $ignore_symlinks = true, $keep = false, $mode = self::STANDARD_MODE, $in_exclusion_zone = false, $depth = 0  ) {
+		public function __construct( $root = '', $path = '', $exclusions_handler = null, $inclusions_handler = null, $visitor = null, $ignore_symlinks = true, $keep = false, $mode = self::STANDARD_MODE, $in_exclusion_zone = false, $depth = 0  ) {
 			
 			// Do not change root even if it is just / because *nix can hanle
 			// multiple / as path separators, e.g., /home/jeremy and //home/jeremy
@@ -1066,12 +1066,12 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 		 *	@return		none
 		 *
 		 */
-		public function visit( $visitor = NULL ) {
+		public function visit( $visitor = null ) {
 			// Visit the node based on the terminals, children and symdirs
 			// arrays calling the add method on the handler.
 			// Add this node, all terminals and symdirs and traverse into
 			// each child or
-			if ( NULL === $visitor ) {
+			if ( null === $visitor ) {
 				$visitor = $this->_visitor;
 			}
 			
@@ -1086,8 +1086,8 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 					// zip method whether it includes this directory or not
 					// (or rather the generator of the file list for the method).
 					$vars[ 'empty' ] = true;
-					$vars[ 'csize' ] = 0;
-					$vars[ 'tsize' ] = 0;				
+					$vars[ 'csize' ] = (double)0;
+					$vars[ 'tsize' ] = (double)0;				
 				} elseif ( empty( $this->_terminals ) && empty( $this->_symdirs ) && empty( $this->_children ) ) {
 					// The directory originally had some content but it has all
 					// been excluded. Again set the vars accordingly and it will
@@ -1095,17 +1095,17 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 					// decide whether to include this directory dependent on how
 					// the actual zip method woul dhandle it.
 					$vars[ 'empty' ] = $this->_empty;
-					$vars[ 'csize' ] = 0;
-					$vars[ 'tsize' ] = 0;
+					$vars[ 'csize' ] = (double)0;
+					$vars[ 'tsize' ] = (double)0;
 				} else {
 					// Directory with content needs content size and (initial) total size
 					// Total size may be updated later if there are any children
 					$vars[ 'empty' ] = $this->_empty;
 					foreach ( $this->_terminals as $terminal ) {
-						$this->_csize += $terminal[ 'size' ];
+						$this->_csize += (double)$terminal[ 'size' ];
 					}
-					$vars[ 'csize' ] = $this->_csize;
-					$vars[ 'tsize' ] = $this->_tsize = $this->_csize;
+					$vars[ 'csize' ] = (double)$this->_csize;
+					$vars[ 'tsize' ] = (double)$this->_tsize = (double)$this->_csize;
 				}
 				if ( @is_link( $this->_root . ltrim( $this->_path, self::NORM_DIRECTORY_SEPARATOR ) ) ) {
 					$vars[ 'symlink' ] = true;
@@ -1161,7 +1161,7 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 					// otherwise we'll destroy the child.
 					$child[ 'child' ] = new pluginbuddy_zbdir_node( $this->_root, $child[ 'name' ], $this->_exclusions_handler, $this->_inclusions_handler, $this->_visitor, $this->_ignore_symlinks, $this->_keep, $this->_mode, $child[ 'ezone' ], $child[ 'depth' ] );
 					// Increment the total size for this directory node by the total size of the child
-					$this->_tsize += $child[ 'child' ]->get_tsize(); 
+					$this->_tsize += (double)$child[ 'child' ]->get_tsize(); 
 					if ( false === $this->_keep ) {
 						unset( $child[ 'child' ] );
 					}
@@ -1180,21 +1180,113 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 			// Now we have to do some updating on first visit to patch values we
 			// didn't know before - use the item key we saved earlier
 			if ( false === $this->_visited ) {
-				$this->_self[ 'tsize' ] = $this->_tsize;
-				$visitor->update( $update_key, array( 'tsize' => $this->_tsize ) );
+				$this->_self[ 'tsize' ] = (double)$this->_tsize;
+				$visitor->update( $update_key, array( 'tsize' => (double)$this->_tsize ) );
 			}
 			
 			// Remember that we have been visited so that any subsequent visit
 			// will just use what has already been set up
 			$this->_visited = true;
 			
+			// The caller may need to know the actual visitor used if called with null
+			return $visitor;
+			
 		}
 	
 	}
 	
-	// Basic class definition that satisfies node usage
-	// It doesn't need to do anything other than that.
+	class pluginbuddy_zbdir_null_object {
+		
+		public function __construct() {
+			
+		}
+		
+		public function __destruct() {
+			
+		}
+		
+		public function __call( $method, $arguments ) {
+			
+		}
+		
+	}
+		
+	// Currently just a wrapper for pb_backupbuddy::status()
+	// TODO: Would prefer to have a generic logger and this would
+	// extend it if required (we may not even need this dependent
+	// on how logging evolves)
+	class pluginbuddy_zbdir_logger {
+		
+		protected $_prefix = '';
+		protected $_suffix = '';
+		
+		public function __construct( $prefix = "", $suffix = "" ) {
+			
+			if ( !empty( $prefix ) ) {
+
+				$this->set_prefix( $prefix );
+
+			}
+			
+			if ( !empty( $suffix ) ) {
+
+				$this->set_suffix( $suffix );
+
+			}
+			
+		}
+		
+		public function __destruct() {
+			
+		}
+		
+		public function set_prefix( $prefix = "" ) {
+			
+			$this->_prefix = $prefix;
+			
+			return $this;
+			
+		}
+		
+		public function get_prefix() {
+			
+			return $this->_prefix;
+
+		}
+		
+		public function set_suffix( $suffix = "" ) {
+			
+			$this->_suffix = $suffix;
+			
+			return $this;
+			
+		}
+		
+		public function get_suffix() {
+			
+			return $this->_suffix;
+
+		}
+		
+		public function log( $level, $message, $prefix = null, $suffix = null ) {
+			
+			$prefix_to_use = ( is_null( $prefix ) ) ? $this->_prefix : ( ( is_string( $prefix ) ) ? $prefix : "" ) ;
+			$suffix_to_use = ( is_null( $suffix ) ) ? $this->_suffix : ( ( is_string( $suffix ) ) ? $suffix : "" ) ;
+			
+			pb_backupbuddy::status( $level, $prefix_to_use . $message . $suffix_to_use );
+			
+			return $this;
+			
+		}
+		
+	}
+
+	// Basic class definition that satisfies node requirements
 	class pluginbuddy_zbdir_visitor {
+		
+		protected $_logger = null;
+		
+		protected $_process_monitor = null;
 	
 		public function __construct() {
 			
@@ -1216,8 +1308,55 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 
 		}
 		
-	}
+		public function finalize() {
 
+		}
+
+		public function set_logger( $logger ) {
+			
+			$this->_logger = $logger;
+			
+			return $this;
+			
+		}
+		
+		public function get_logger() {
+			
+			if ( is_null( $this->_logger ) ) {
+
+				$logger = new pluginbuddy_zbdir_null_object();
+				$this->set_logger( $logger );
+
+			}
+			
+			return $this->_logger;
+			
+		}
+		
+		public function set_process_monitor( $process_monitor ) {
+			
+			$this->_process_monitor = $process_monitor;
+			
+			return $this;
+			
+		}
+		
+		public function get_process_monitor() {
+			
+			// If no process monitor has been defined then create a
+			// null object to use.
+			if ( is_null( $this->_process_monitor ) ) {
+				
+				$pm = new pluginbuddy_zbdir_null_object();
+				$this->set_process_monitor( $pm );
+				
+			}
+			
+			return $this->_process_monitor;
+			
+		}
+		
+	}
 
 	// This class can be used to visit the the tree and builds a flat array
 	// of the tree contents with all the details for every file and directory
@@ -1279,6 +1418,16 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 			
 			}
 			
+			if ( 0 === ( ( $count = $this->count() ) % 100 ) ) {
+				
+				// Keep an eye on process progress (if there is a process monitor set)
+				$this->get_process_monitor()->checkpoint();
+				
+				// Log progress (if there is a logger set)
+				$this->get_logger()->log( 'details', 'Determining list of candidate files + directories to be added to the zip archive: ' . $count );
+				
+			}
+			
 		}
 		
 		public function get_last_key() {
@@ -1312,6 +1461,18 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 			}
 			
 		}
+		
+		// Called by user of the visitor after completion of visit to do
+		// any final actions
+		public function finalize() {
+
+			// By default logging every 100 items but we need to also log the final count
+			// which in general will not be an exact multiple of 100
+			$count = $this->count();
+			$this->get_logger()->log( 'details', 'Determining list of candidate files + directories to be added to the zip archive: ' . $count );
+			
+		}
+		
 		// Get selected item values as a string for display or otherwise
 		// Normally a bool will be cast as empty string if false which isn't
 		// ideal in this context so we handle this specifcally. We could call
@@ -1450,15 +1611,15 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 													'pattern_exclusions' => array(),
         										    'pattern_inclusions' => array(),
         										    'pattern_auto_delimit' => true,
-        										    'visitor' => NULL,
+        										    'visitor' => null,
         										    'ignore_symlinks' => true,
         										    'keep_tree' => false);
         								  
-        protected $_exclusions_handler = NULL;
-        protected $_inclusions_handler = NULL;
-        protected $_visitor = NULL;
+        protected $_exclusions_handler = null;
+        protected $_inclusions_handler = null;
+        protected $_visitor = null;
         
-        protected $_root_node = NULL;
+        protected $_root_node = null;
 
 		/**
 		 *	__construct()
@@ -1545,7 +1706,7 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 			// Now we need a visitor that we should have been given. If not then we
 			// create a null visitor that does nothing and the assumtion is that the tree is
 			// being kept and will be visited with a specific visitor subsequently
-			if ( NULL == $this->_options[ 'visitor' ] ) {
+			if ( null == $this->_options[ 'visitor' ] ) {
 				// Not given one - we need at least a basic one so create it
 				$this->_visitor = new pluginbuddy_zbdir_visitor();
 			} else {
@@ -1565,6 +1726,9 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 				// And throw it on
 				throw $e;
 			}
+			
+			// Do any last actions required by the visitor after we have fully traversed the tree
+			$this->_visitor->finalize();
 			
 			// If we didn't bomb out with an exception then we should have built the tree and visited it
 			// with either our null visitor or the visitor we were given. The caller can use their visitor
@@ -1588,17 +1752,17 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 		public function __destruct( ) {
 		
 			// Destroy exclusions handler if we own it
-			if ( NULL == $this->_options[ 'exclusions_handler' ] ) {
+			if ( null == $this->_options[ 'exclusions_handler' ] ) {
 				unset( $this->_exclusions_handler );
 			}
 			
 			// Destroy inclusions handler if we own it
-			if ( NULL == $this->_options[ 'inclusions_handler' ] ) {
+			if ( null == $this->_options[ 'inclusions_handler' ] ) {
 				unset( $this->_inclusions_handler );
 			}
 			
 			// Destroy the output handler if we own it
-			if ( NULL == $this->_options[ 'visitor' ] ) {
+			if ( null == $this->_options[ 'visitor' ] ) {
 				unset( $this->_visitor );
 			}
 			
@@ -1607,16 +1771,20 @@ if ( !class_exists( "pluginbuddy_zbdir" ) ) {
 		
 		}
 		
-		public function visit( $visitor = NULL ) {
+		public function visit( $visitor = null ) {
 		
-			// Being asked to visit the tree again - note that if the visitor is NULL then
+			// Being asked to visit the tree again - note that if the visitor is null then
 			// previous visitor is being used again and the root node will have remembered
-			// it so we just call the root node visit with visitor.
+			// it so we just call the root node visit with visitor. for this reason we have
+			// the visit() function return the actual visitor used so we can then call the
+			// finalise() function.
 			// FFS: Mayber we should check we have a kept tree otherwise there is nothing to
 			// visit
 			
-			$this->_root_node->visit( $visitor );
+			$visitor = $this->_root_node->visit( $visitor );
 		
+			$visitor->finalize();
+			
 		}
 	
 	}

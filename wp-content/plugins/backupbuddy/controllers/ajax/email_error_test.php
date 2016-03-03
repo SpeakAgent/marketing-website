@@ -1,5 +1,5 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
 
 
 /* email_error_test()

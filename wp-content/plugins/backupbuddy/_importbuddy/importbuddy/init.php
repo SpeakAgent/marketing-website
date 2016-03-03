@@ -2,11 +2,10 @@
 /**
  *
  *	Plugin Name: ImportBuddy
- *	Plugin URI: http://pluginbuddy.com/
+ *	Plugin URI: http://ithemes.com/
  *	Description: BackupBuddy Importer
- *	Version: 1.0.2
- *	Author: Dustin Bolton
- *	Author URI: http://dustinbolton.com/
+ *	@since 1.0.2
+ *	@author Dustin Bolton
  *
  *	Installation:
  * 
@@ -27,19 +26,21 @@ define( 'PB_STANDALONE', true );
 define( 'PB_IMPORTBUDDY', true );
 
 $pluginbuddy_settings = array(
-				'slug'				=>		'backupbuddy',
-				'php_minimum'		=>		'5.2',
-				'series'			=>		'',
-				'default_options'	=>		array(
-												'bb_version'				=>	PB_BB_VERSION,	// BB version to be filled in on download.
-												'log_level'					=>	'3',						// Level of error logging. ImportBuddy ALWAYS logs at level 3 (everything).
-												'backup_directory'			=>	'',
-											),
-				'modules'			=>		array(
-												'updater'				=>	false,						// Load PluginBuddy automatic upgrades.
-												'filesystem'			=>	true,						// File system helper methods.
-												'format'				=>	true,						// Text / data formatting helper methods.
-											)
+				'slug'						=>		'backupbuddy',
+				'php_minimum'				=>		'5.2',
+				'series'					=>		'',
+				'remote_api'				=>		'0', // Set to 1 by state for deployments.
+				'default_state_overrides'	=>		array(), // Default state to override the main defaults. Good for automating imports. Applied over defaults during construction of restore class.
+				'default_options'			=>		array(
+														'bb_version'				=>	PB_BB_VERSION,	// BB version to be filled in on download.
+														'backup_directory'			=>	'',
+														'log_level'					=>	0, // No longer using this method for handling logging. status() method always logs all if importbuddy.
+													),
+				'modules'					=>		array(
+														'updater'				=>	false,						// Load PluginBuddy automatic upgrades.
+														'filesystem'			=>	true,						// File system helper methods.
+														'format'				=>	true,						// Text / data formatting helper methods.
+													)
 			);
 
 

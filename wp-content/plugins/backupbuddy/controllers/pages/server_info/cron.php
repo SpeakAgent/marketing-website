@@ -34,7 +34,7 @@ if ( pb_backupbuddy::_POST( 'bulk_action' ) == 'delete_cron' ) {
 			
 		}
 		
-		pb_backupbuddy::alert( __('Deleted sheduled CRON event(s):', 'it-l10n-backupbuddy' ) . '<br>' . implode( '<br>', $deleted_crons ) );
+		pb_backupbuddy::alert( __('Deleted scheduled CRON event(s):', 'it-l10n-backupbuddy' ) . '<br>' . implode( '<br>', $deleted_crons ) );
 		$cron = get_option('cron'); // Reset to most up to date status for cron listing below. Takes into account deletions.
 	}
 }
@@ -74,66 +74,7 @@ if ( !empty( $_GET['run_cron'] ) ) {
 
 
 
-
-// Loop through each cron time to create $crons array for displaying later.
-$crons = array();
-foreach ( (array) $cron as $time => $cron_item ) {
-	if ( is_numeric( $time ) ) {
-		// Loop through each schedule for this time
-		foreach ( (array) $cron_item as $hook_name => $event ) {
-			foreach ( (array) $event as $item_name => $item ) {
-				
-				// Determine period.
-				if ( !empty( $item['schedule'] ) ) { // Recurring schedule.
-					$period = $item['schedule'];
-				} else { // One-time only cron.
-					$period = __('one time only', 'it-l10n-backupbuddy' );
-				}
-				
-				// Determine interval.
-				if ( !empty( $item['interval'] ) ) {
-					$interval = $item['interval'] . ' seconds';
-				} else {
-					$interval = __('one time only', 'it-l10n-backupbuddy' );
-				}
-				
-				// Determine arguments.
-				if ( !empty( $item['args'] ) ) {
-					//$arguments = implode( ',', $item['args'] );
-					$arguments = '';
-					foreach( $item['args'] as $arg ) {
-						$arguments .= '<textarea wrap="off">' . print_r( $arg, true ) . '</textarea>';
-						/*
-						if ( is_array( $arg ) ) {
-							$arguments .=  '[' . print_r( $arg, true ) . ']';//pb_backupbuddy::$format->multi_implode( $arg , '; ' )
-						} else {
-							$arguments .= $arg;
-						}
-						*/
-					}
-				} else {
-					$arguments = __('none', 'it-l10n-backupbuddy' );
-				}
-				
-				// Populate crons array for displaying later.
-				$crons[ $time . '|' . $hook_name . '|' . $item_name] = array(
-					'<span title=\'Key: ' . $item_name . '\'>' . $hook_name . '</span>',
-					pb_backupbuddy::$format->date( pb_backupbuddy::$format->localize_time( $time ) ) . '<br><span class="description">Timestamp: ' . $time . '</span>',
-					$period,
-					$interval,
-					$arguments,
-				);
-				
-			} // End foreach.
-			unset( $item );
-			unset( $item_name );
-		} // End foreach.
-		unset( $event );
-		unset( $hook_name );
-	} // End if is_numeric.
-} // End foreach.
-unset( $cron_item );
-unset( $time );
+include( '_cron.php' );
 
 
 
@@ -143,8 +84,8 @@ pb_backupbuddy::$ui->list_table(
 	array(
 		'action'					=>	pb_backupbuddy::page_url() . '#pb_backupbuddy_getting_started_tab_tools',
 		'columns'					=>	array(
-											__( 'Event', 'it-l10n-backupbuddy' ),
-											__( 'Run Time', 'it-l10n-backupbuddy' ),
+											__( 'Scheduled Events', 'it-l10n-backupbuddy' ),
+											__( 'Next Run', 'it-l10n-backupbuddy' ),
 											__( 'Period', 'it-l10n-backupbuddy' ),
 											__( 'Interval', 'it-l10n-backupbuddy' ),
 											__( 'Arguments', 'it-l10n-backupbuddy' ),
@@ -157,26 +98,60 @@ pb_backupbuddy::$ui->list_table(
 		'hover_action_column_key'	=>	'0',
 	)
 );
+echo '<br><br>';
 
 
+// Display time intervals table.
+$pretty_intervals = array();
+$schedule_intervals = wp_get_schedules();
+foreach( $schedule_intervals as $interval_tag => $schedule_interval ) {
+	$pretty_intervals[ $schedule_interval['interval'] ] = array(
+		$schedule_interval['display'],
+		$interval_tag,
+		$schedule_interval['interval'],
+	);
+}
+ksort( $pretty_intervals );
+pb_backupbuddy::$ui->list_table(
+	$pretty_intervals, // Array of cron items set in code section above.
+	array(
+		'columns'					=>	array(
+											__( 'Schedule Periods', 'it-l10n-backupbuddy' ),
+											__( 'Tag', 'it-l10n-backupbuddy' ),
+											__( 'Interval', 'it-l10n-backupbuddy' ),
+										),
+		'css'						=>		'width: 100%;',
+	)
+);
+echo '<br><br>';
 
+
+echo '<center>' . __('Current Time', 'it-l10n-backupbuddy' ) . ': ' . pb_backupbuddy::$format->date( time() + ( get_option( 'gmt_offset' ) * 3600 ) ) . ' (' . time() . ')</center>';
 
 
 
 if ( empty( $_GET['show_cron_array'] ) ) {
-	echo '<br>';
-	echo '<center>';
-	echo __('Current Time', 'it-l10n-backupbuddy' ) . ': ' . pb_backupbuddy::$format->date( time() + ( get_option( 'gmt_offset' ) * 3600 ) ) . ' (' . time() . '). ';
-	echo 'Additional cron control is available via the free plugin <a target="_new" href="http://wordpress.org/extend/plugins/wp-cron-control/">WP-Cron Control</a> by Automaticc. ';
-	echo '<a href="' . pb_backupbuddy::page_url() . '&tab=3&show_cron_array=true#pb_backupbuddy_getting_started_tab_tools" style="text-decoration: none;">' . __('Display CRON Debugging Array', 'it-l10n-backupbuddy' ) . '</a>';
-	echo '</center>';
+	?>
+	<p>
+	<center>
+		<a href="<?php echo pb_backupbuddy::page_url(); ?>&tab=3&show_cron_array=true#pb_backupbuddy_getting_started_tab_tools" style="text-decoration: none;">
+			<?php _e('Display CRON Debugging Array', 'it-l10n-backupbuddy' ); ?>
+		</a>
+	</center>
+	</p>
+	<?php
 } else {
-	echo __('Current Time', 'it-l10n-backupbuddy' ) . ': ' . pb_backupbuddy::$format->date( time() + ( get_option( 'gmt_offset' ) * 3600 ) ) . ' (' . time() . ')';
+	
 	echo '<br><textarea readonly="readonly" style="width: 793px;" rows="13" cols="75" wrap="off">';
 	print_r( $cron );
-	echo '</textarea>';
+	echo '</textarea><br><br>';
 }
-echo '<br>';
-
 unset( $cron );
 ?>
+
+<br>
+<div class="description">
+	<b>Note</b>: Due to the way schedules are triggered in WordPress your site must be accessed (frontend or admin area) for scheduled backups to occur.
+	WordPress scheduled events ("crons") may be viewed or run manually in the table above</a>. A <a href="https://www.google.com/search?q=free+website+uptime&oq=free+website+uptime" target="_blank">free website uptime</a> service or <a href="https://ithemes.com/sync-pro/uptime-monitoring/" target="_blank">iThemes Sync Pro's Uptime Monitoring</a> can be used to automatically access your site regularly to help trigger scheduled actions ("crons") in cases of low site activity, with the added perk of keeping track of your site uptime.
+</div>
+

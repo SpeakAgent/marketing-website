@@ -1,5 +1,6 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
 
 // File restorer (actual unzip/restore) in the file restore page.
 /* restore_file_restore()

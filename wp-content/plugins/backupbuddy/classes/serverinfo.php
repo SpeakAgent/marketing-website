@@ -1,7 +1,6 @@
 <?php
 // http://ithemes.com
 //
-// @author Dustin Bolton <http://dustinbolton.com>
 class pb_backupbuddy_serverinfo {
 	
 	/*	get_wp_urls_paths()

@@ -1,5 +1,6 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
 
 // Remote destination saving.
 /*	remote_save()
@@ -31,6 +32,11 @@ if ( count( $save_result['errors'] ) == 0 ) { // NO ERRORS SO SAVE.
 		
 		pb_backupbuddy::$options['remote_destinations'][] = $save_result['data'];
 		
+		$newDestination = array();
+		$newDestination['title'] = $save_result['data']['title'];
+		$newDestination['type'] = $save_result['data']['type'];
+		backupbuddy_core::addNotification( 'destination_created', 'Remote destination created', 'A new remote destination "' . $newDestination['title'] . '" has been created.', $newDestination );
+		
 		pb_backupbuddy::save();
 		echo 'Destination Added.';
 	} elseif ( !isset( pb_backupbuddy::$options['remote_destinations'][$destination_id] ) ) { // EDITING NONEXISTANT.
@@ -45,11 +51,15 @@ if ( count( $save_result['errors'] ) == 0 ) { // NO ERRORS SO SAVE.
 		
 		pb_backupbuddy::save();
 		echo 'Settings saved.';
+		
+		$editedDestination = array();
+		$editedDestination['title'] = $save_result['data']['title'];
+		$editedDestination['type'] = $save_result['data']['type'];
+		backupbuddy_core::addNotification( 'destination_updated', 'Remote destination updated', 'An existing remote destination "' . $editedDestination['title'] . '" has been updated.', $editedDestination );
 	}
 	
 } else {
-	echo "Error saving settings.\n\n";
-	echo implode( "\n", $save_result['errors'] );
+	pb_backupbuddy::alert( 'Error saving settings. ' . implode( "\n", $save_result['errors'] ) );
 }
 die();
 

@@ -13,14 +13,62 @@ if ( pb_backupbuddy::_GET( 'database_replace' ) == '1' ) {
 	
 	?>
 	<script type="text/javascript">
-			function pb_status_append( status_string ) {
-				target_id = 'pb_backupbuddy_status'; // importbuddy_status or pb_backupbuddy_status
-				if( jQuery( '#' + target_id ).length == 0 ) { // No status box yet so suppress.
+			function pb_status_append( json ) {
+				if( 'undefined' === typeof statusBox ) { // No status box yet so may need to create it.
+					statusBox = jQuery( '#pb_backupbuddy_status' );
+					if( statusBox.length == 0 ) { // No status box yet so suppress.
+						return;
+					}
+				}
+				
+				if ( 'string' == ( typeof json ) ) {
+					backupbuddy_log( json );
+					console.log( 'Status log received string: ' + json );
 					return;
 				}
-				jQuery( '#' + target_id ).append( "\n" + status_string );
-				textareaelem = document.getElementById( target_id );
-				textareaelem.scrollTop = textareaelem.scrollHeight;
+				
+				// Used in BackupBuddy _backup-perform.php and ImportBuddy _header.php
+				json.date = new Date();
+				json.date = new Date(  ( json.time * 1000 ) + json.date.getTimezoneOffset() * 60000 );
+				var seconds = json.date.getSeconds();
+				if ( seconds < 10 ) {
+					seconds = '0' + seconds;
+				}
+				json.date = backupbuddy_hourpad( json.date.getHours() ) + ':' + json.date.getMinutes() + ':' + seconds;
+				
+				triggerEvent = 'backupbuddy_' + json.event;
+				
+				
+				// Log non-text events.
+				if ( ( 'details' !== json.event ) && ( 'message' !== json.event ) && ( 'error' !== json.event ) ) {
+					//console.log( 'Non-text event `' + triggerEvent + '`.' );
+				} else {
+					//console.log( json.data );
+				}
+				//console.log( 'trigger: ' + triggerEvent );
+				
+				backupbuddy_log( json );
+				
+				
+			} // End function pb_status_append().
+			
+			// left hour pad with zeros
+			function backupbuddy_hourpad(n) { return ("0" + n).slice(-2); }
+			
+			// Used in BackupBuddy _backup-perform.php and ImportBuddy _header.php and _rollback.php
+			function backupbuddy_log( json ) {
+				
+				message = '';
+				
+				if ( 'string' == ( typeof json ) ) {
+					message = "-----------\t\t-------\t-------\t" + json;
+				} else {
+					message = json.date + '.' + json.u + " \t" + json.run + "sec \t" + json.mem + "MB\t" + json.data;
+				}
+				
+				statusBox.append( "\r\n" + message );
+				statusBox.scrollTop( statusBox[0].scrollHeight - statusBox.height() );
+				
 			}
 		</script>
 	<?php
@@ -30,7 +78,7 @@ if ( pb_backupbuddy::_GET( 'database_replace' ) == '1' ) {
 	
 	// Instantiate database replacement class.
 	require_once( pb_backupbuddy::plugin_path() . '/lib/dbreplace/dbreplace.php' );
-	$dbreplace = new pluginbuddy_dbreplace();
+	$dbreplace = new pluginbuddy_dbreplace( '', 1, 60*60*24 );
 	
 	// Set up variables by getting POST data.
 	$needle = backupbuddy_core::dbEscape( pb_backupbuddy::_POST( 'needle' ) );

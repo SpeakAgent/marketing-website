@@ -119,9 +119,9 @@ class Dropbox_API {
         $result=$this->multipartFetch($this->api_content_url . 'files/' . 
                 $root . '/' . trim($directory,'/'), $file, $filename);
         
-        if(!isset($result["httpStatus"]) || $result["httpStatus"] != 200) 
-            throw new Dropbox_Exception("Uploading file to Dropbox failed");
-
+        if(!isset($result["httpStatus"]) || $result["httpStatus"] != 200) {
+            throw new Dropbox_Exception("Uploading file to Dropbox failed. Result: `" . print_r( $result, true ) . "`.");
+        }
         return true;
     }
 

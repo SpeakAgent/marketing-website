@@ -473,7 +473,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 			} catch ( Exception $e ) {
 			
 				$error_string = $e->getMessage();
-				pb_backupbuddy::status( 'details', sprintf( __('ZipArchive test FAILED: %1$s','it-l10n-backupbuddy' ), $error_string ) );
+				$this->log( 'details', sprintf( __('ZipArchive test FAILED: %1$s','it-l10n-backupbuddy' ), $error_string ) );
 				$result = false;
 
 			}
@@ -491,17 +491,17 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 				
 					if ( !$za->addFile( __FILE__, 'this_is_a_test.txt') ) {
 					
-						pb_backupbuddy::status( 'details',  __('ZipArchive test FAILED: Unable to add file to zip file.','it-l10n-backupbuddy' ) );
+						$this->log( 'details',  __('ZipArchive test FAILED: Unable to add file to zip file.','it-l10n-backupbuddy' ) );
 						$error_string = $za->errorInfo();
-						pb_backupbuddy::status( 'details',  __('ZipArchive Error: ','it-l10n-backupbuddy' ) . $error_string );
+						$this->log( 'details',  __('ZipArchive Error: ','it-l10n-backupbuddy' ) . $error_string );
 						
 					}
 					
 					if ( !$za->close() ) {
 					
-						pb_backupbuddy::status( 'details',  __('ZipArchive test FAILED: Problem creating/closing zip file.','it-l10n-backupbuddy' ) );
+						$this->log( 'details',  __('ZipArchive test FAILED: Problem creating/closing zip file.','it-l10n-backupbuddy' ) );
 						$error_string = $za->errorInfo();
-						pb_backupbuddy::status( 'details',  __('ZipArchive Error: ','it-l10n-backupbuddy' ) . $error_string );
+						$this->log( 'details',  __('ZipArchive Error: ','it-l10n-backupbuddy' ) . $error_string );
 						
 					}
 					
@@ -509,7 +509,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 					
 						if ( !@unlink( $test_file ) ) {
 					
-							pb_backupbuddy::status( 'details', 'Error #564634. Unable to delete test file `' . $test_file . '`.' );
+							$this->log( 'details', 'Error #564634. Unable to delete test file `' . $test_file . '`.' );
 						
 						}
 					
@@ -523,26 +523,26 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 						$this->_method_details[ 'attr' ][ 'is_unarchiver' ] = true;
 						$this->_method_details[ 'attr' ][ 'is_extractor' ] = true;
 						
-						pb_backupbuddy::status( 'details', __('ZipArchive test PASSED.','it-l10n-backupbuddy' ) );
+						$this->log( 'details', __('ZipArchive test PASSED.','it-l10n-backupbuddy' ) );
 						$result = true;
 						
 					} else {
 					
-						pb_backupbuddy::status( 'details', __('ZipArchive test FAILED: Zip file not found.','it-l10n-backupbuddy' ) );
+						$this->log( 'details', __('ZipArchive test FAILED: Zip file not found.','it-l10n-backupbuddy' ) );
 						$result = false;
 						
 					}
 					
 				} else {
 				
-					pb_backupbuddy::status( 'details',  __('ZipArchive test FAILED: Unable to create/open zip file.','it-l10n-backupbuddy' ) );
+					$this->log( 'details',  __('ZipArchive test FAILED: Unable to create/open zip file.','it-l10n-backupbuddy' ) );
 					
 					// If we got an error code (rather than simply a false failure indication) then translate it
 					// It seems that in these cases the internal status doesn't indicate anything so we cannot use that
 					if ( false !== $res ) {
 					
 						$error_string = $za->errorInfo( $res );
-						pb_backupbuddy::status( 'details',  __('ZipArchive Error: ','it-l10n-backupbuddy' ) . $error_string );
+						$this->log( 'details',  __('ZipArchive Error: ','it-l10n-backupbuddy' ) . $error_string );
 					
 					}
 					
@@ -578,7 +578,27 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 		 */
 		public function create( $zip, $dir, $excludes, $tempdir, $listmaker = NULL ) {
 		
-			pb_backupbuddy::status( 'details', __('The ','it-l10n-backupbuddy' ) . $this->get_method_tag() . __(' method is not currently supported for backup.','it-l10n-backupbuddy' ) );
+			$this->log( 'details', __('The ','it-l10n-backupbuddy' ) . $this->get_method_tag() . __(' method is not currently supported for backup.','it-l10n-backupbuddy' ) );
+			return false;
+		
+		}
+		
+		/**
+		 *	grow()
+		 *	
+		 *	A function that grows an archive file from already calculated contet list
+		 *	Always cleans up after itself
+		 *	
+		 *	
+		 *	@param		string	$zip			Full path & filename of ZIP Archive file to grow
+		 *	@param		string	$tempdir		Full path of directory for temporary usage
+		 *	@param		array	$state
+		 *	@return		bool					True if the creation was successful, array for continuation, false otherwise
+		 *
+		 */
+		public function grow( $zip, $tempdir, $state ) {
+		
+			$this->log( 'details', __('The ','it-l10n-backupbuddy' ) . $this->get_method_tag() . __(' method is not currently supported for backup.','it-l10n-backupbuddy' ) );
 			return false;
 		
 		}
@@ -646,7 +666,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 			
 				// Something fishy - the methods indicated ziparchive but we couldn't find the class
 				$error_string = $e->getMessage();
-				pb_backupbuddy::status( 'details', sprintf( __('ziparchive indicated as available method but error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
+				$this->log( 'details', sprintf( __('ziparchive indicated as available method but error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
 				$result = false;
 				
 			}
@@ -668,12 +688,12 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 					// Currently we can only distinguish between success and failure but no finer grain
 					if ( true === $result ) {
 					
-						pb_backupbuddy::status( 'details', sprintf( __('ziparchive extracted file contents (%1$s to %2$s)','it-l10n-backupbuddy' ), $zip_file, $destination_directory ) );
+						$this->log( 'details', sprintf( __('ziparchive extracted file contents (%1$s to %2$s)','it-l10n-backupbuddy' ), $zip_file, $destination_directory ) );
 
 					} else {
 					
 						$error_string = $za->errorInfo();
-						pb_backupbuddy::status( 'details', sprintf( __('ziparchive failed to extract file contents (%1$s to %2$s) - Error Info: %3$s.','it-l10n-backupbuddy' ), $zip_file, $destination_directory, $error_string ) );
+						$this->log( 'details', sprintf( __('ziparchive failed to extract file contents (%1$s to %2$s) - Error Info: %3$s.','it-l10n-backupbuddy' ), $zip_file, $destination_directory, $error_string ) );
 					
 						// May seem redundant but belt'n'braces
 						$result = false;
@@ -685,7 +705,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 				
 					// Couldn't open archive - will return for maybe another method to try
 					$error_string = $za->errorInfo( $result );
-					pb_backupbuddy::status( 'details', sprintf( __('ZipArchive failed to open file to extract contents (%1$s to %2$s) - Error Info: %3$s.','it-l10n-backupbuddy' ), $zip_file, $destination_directory, $error_string ) );
+					$this->log( 'details', sprintf( __('ZipArchive failed to open file to extract contents (%1$s to %2$s) - Error Info: %3$s.','it-l10n-backupbuddy' ), $zip_file, $destination_directory, $error_string ) );
 
 					// Return an error code and a description - this needs to be handled more generically
 					//$result = array( 1, "Unable to get archive contents" );
@@ -729,7 +749,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 			
 				// Something fishy - the methods indicated ziparchive but we couldn't find the class
 				$error_string = $e->getMessage();
-				pb_backupbuddy::status( 'details', sprintf( __('ziparchive indicated as available method but error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
+				$this->log( 'details', sprintf( __('ziparchive indicated as available method but error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
 				$result = false;
 				
 			}
@@ -862,7 +882,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 						// Currently we can only distinguish between success and failure but no finer grain
 						if ( true === $result ) {
 					
-							pb_backupbuddy::status( 'details', sprintf( __('ziparchive extracted file contents (%1$s from %2$s to %3$s%4$s)','it-l10n-backupbuddy' ), $what, $zip_file, $destination_directory, $where ) );
+							$this->log( 'details', sprintf( __('ziparchive extracted file contents (%1$s from %2$s to %3$s%4$s)','it-l10n-backupbuddy' ), $what, $zip_file, $destination_directory, $where ) );
 
 							// Rename if we have to
 							if ( true === $rename_required) {
@@ -878,7 +898,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 					
 							// For now let's just print the error code and drop through
 							$error_string = $za->errorInfo();
-							pb_backupbuddy::status( 'details', sprintf( __('ziparchive failed to open/process file to extract file contents (%1$s from %2$s to %3$s%4$s) - Error Info: %5$s.','it-l10n-backupbuddy' ), $what, $zip_file, $destination_directory, $where, $error_string ) );
+							$this->log( 'details', sprintf( __('ziparchive failed to open/process file to extract file contents (%1$s from %2$s to %3$s%4$s) - Error Info: %5$s.','it-l10n-backupbuddy' ), $what, $zip_file, $destination_directory, $where, $error_string ) );
 					
 							// May seem redundant but belt'n'braces
 							$result = false;
@@ -898,7 +918,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 				
 					// Couldn't open archive - will return for maybe another method to try
 					$error_string = $za->errorInfo( $result );
-					pb_backupbuddy::status( 'details', sprintf( __('ZipArchive failed to open file to extract contents (%1$s to %2$s) - Error Info: %3$s.','it-l10n-backupbuddy' ), $zip_file, $destination_directory, $error_string ) );
+					$this->log( 'details', sprintf( __('ZipArchive failed to open file to extract contents (%1$s to %2$s) - Error Info: %3$s.','it-l10n-backupbuddy' ), $zip_file, $destination_directory, $error_string ) );
 
 					// Return an error code and a description - this needs to be handled more generically
 					//$result = array( 1, "Unable to get archive contents" );
@@ -944,7 +964,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 			
 				// Something fishy - the methods indicated ziparchive but we couldn't find the class
 				$error_string = $e->getMessage();
-				pb_backupbuddy::status( 'details', sprintf( __('ziparchive indicated as available method but error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
+				$this->log( 'details', sprintf( __('ziparchive indicated as available method but error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
 
 				// Return an error code and a description - this needs to be handled more generically
 				$result = array( 1, "Class not available to match method" );
@@ -965,12 +985,12 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 					// If we got an index we found it otherwise not found
 					if ( false !== $index ) {
 					
-						pb_backupbuddy::status( 'details', __('File found (ziparchive)','it-l10n-backupbuddy' ) . ': ' . $locate_file );
+						$this->log( 'details', __('File found (ziparchive)','it-l10n-backupbuddy' ) . ': ' . $locate_file );
 						$result = true;
 						
 					} else {
 					
-						pb_backupbuddy::status( 'details', __('File not found (ziparchive)','it-l10n-backupbuddy' ) . ': ' . $locate_file );
+						$this->log( 'details', __('File not found (ziparchive)','it-l10n-backupbuddy' ) . ': ' . $locate_file );
 						$result = false;
 						
 					}
@@ -979,7 +999,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 				
 					// Couldn't open archive - will return for maybe another method to try
 					$error_string = $za->errorInfo( $result );
-					pb_backupbuddy::status( 'details', sprintf( __('ZipArchive failed to open file to check if file exists (looking for %1$s in %2$s) - Error Info: %3$s.','it-l10n-backupbuddy' ), $locate_file , $zip_file, $error_string ) );
+					$this->log( 'details', sprintf( __('ZipArchive failed to open file to check if file exists (looking for %1$s in %2$s) - Error Info: %3$s.','it-l10n-backupbuddy' ), $locate_file , $zip_file, $error_string ) );
 
 					// Return an error code and a description - this needs to be handled more generically
 					$result = array( 1, "Failed to open/process file" );
@@ -1021,7 +1041,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 			
 				// Something fishy - the methods indicated ziparchive but we couldn't find the class
 				$error_string = $e->getMessage();
-				pb_backupbuddy::status( 'details', sprintf( __('ziparchive indicated as available method but error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
+				$this->log( 'details', sprintf( __('ziparchive indicated as available method but error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
 				$result = false;
 				
 			}
@@ -1054,7 +1074,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 					}
 					
 					
-					pb_backupbuddy::status( 'details', sprintf( __('ziparchive listed file contents (%1$s)','it-l10n-backupbuddy' ), $zip_file ) );
+					$this->log( 'details', sprintf( __('ziparchive listed file contents (%1$s)','it-l10n-backupbuddy' ), $zip_file ) );
 
 					$this->log_archive_file_stats( $zip_file );	
 
@@ -1064,7 +1084,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 				
 					// Couldn't open archive - will return for maybe another method to try
 					$error_string = $za->errorInfo( $result );
-					pb_backupbuddy::status( 'details', sprintf( __('ZipArchive failed to open file to list contents (%1$s) - Error Info: %2$s.','it-l10n-backupbuddy' ), $zip_file, $error_string ) );
+					$this->log( 'details', sprintf( __('ZipArchive failed to open file to list contents (%1$s) - Error Info: %2$s.','it-l10n-backupbuddy' ), $zip_file, $error_string ) );
 
 					// Return an error code and a description - this needs to be handled more generically
 					//$result = array( 1, "Unable to get archive contents" );
@@ -1106,7 +1126,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 			
 				// Something fishy - the methods indicated ziparchive but we couldn't find the class
 				$error_string = $e->getMessage();
-				pb_backupbuddy::status( 'details', sprintf( __('ziparchive indicated as available method but error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
+				$this->log( 'details', sprintf( __('ziparchive indicated as available method but error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
 				$result = false;
 				
 			}
@@ -1125,13 +1145,13 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 					// If we got back true then all is well with the world
 					if ( true === $result ) {
 					
-						pb_backupbuddy::status( 'details', sprintf( __('ZipArchive set comment in file %1$s','it-l10n-backupbuddy' ), $zip_file ) );
+						$this->log( 'details', sprintf( __('ZipArchive set comment in file %1$s','it-l10n-backupbuddy' ), $zip_file ) );
 						$result = true;
 						
 					} else {
 					
 						// If we failed to set the commnent then log it (?) and drop through
-						pb_backupbuddy::status( 'details', sprintf( __('ZipArchive failed to set comment in file %1$s','it-l10n-backupbuddy' ), $zip_file ) );
+						$this->log( 'details', sprintf( __('ZipArchive failed to set comment in file %1$s','it-l10n-backupbuddy' ), $zip_file ) );
 						$result = false;
 						
 					}
@@ -1140,7 +1160,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 				
 					// If we couldn't open the zip file then log it (?) and drop through
 					$error_string = $za->errorInfo( $result );
-					pb_backupbuddy::status( 'details', sprintf( __('ZipArchive failed to open file to set comment in file %1$s - Error Info: %2$s','it-l10n-backupbuddy' ), $zip_file, $error_string ) );
+					$this->log( 'details', sprintf( __('ZipArchive failed to open file to set comment in file %1$s - Error Info: %2$s','it-l10n-backupbuddy' ), $zip_file, $error_string ) );
 					$result = false;
 										
 				}
@@ -1177,7 +1197,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 			
 				// Something fishy - the methods indicated ziparchive but we couldn't find the class
 				$error_string = $e->getMessage();
-				pb_backupbuddy::status( 'details', sprintf( __('ziparchive indicated as available method but error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
+				$this->log( 'details', sprintf( __('ziparchive indicated as available method but error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
 				$result = false;
 				
 			}
@@ -1210,23 +1230,31 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 					// If we have a comment (even if empty) then return it
 					if ( false !== $comment ) {
 
+						// Because comment may have been added by zip utility it may have been split over
+						// multiple lines so we need to "unsplit" it - need to check for different possible
+						// line endings
+						$lines = preg_split( "/\r\n|\n|\r/", $comment );
+
+						// Now convert back to a string but with line endings removed
+						$comment = implode( "", $lines );
+
 						// Note: new archives will return an empty comment if one was not added at creation
-						pb_backupbuddy::status( 'details', sprintf( __('ZipArchive retrieved comment in file %1$s','it-l10n-backupbuddy' ), $zip_file ) );
+						$this->log( 'details', sprintf( __('ZipArchive retrieved comment in file %1$s','it-l10n-backupbuddy' ), $zip_file ) );
 						$result = $comment;
-						
+
 					} else {
-					
+
 						// If we failed to get the commnent then log it (?) and drop through
-						pb_backupbuddy::status( 'details', sprintf( __('ZipArchive failed to retrieve comment in file %1$s','it-l10n-backupbuddy' ), $zip_file ) );
+						$this->log( 'details', sprintf( __('ZipArchive failed to retrieve comment in file %1$s','it-l10n-backupbuddy' ), $zip_file ) );
 						$result = false;
-						
-					}
+
+					}	
 
 				} else {
 				
 					// If we couldn't open the zip file then log it (?) and drop through
 					$error_string = $za->errorInfo( $result );
-					pb_backupbuddy::status( 'details', sprintf( __('ZipArchive failed to open file to get comment in file %1$s - Error Info: %2$s','it-l10n-backupbuddy' ), $zip_file, $error_string ) );
+					$this->log( 'details', sprintf( __('ZipArchive failed to open file to get comment in file %1$s - Error Info: %2$s','it-l10n-backupbuddy' ), $zip_file, $error_string ) );
 					$result = false;
 										
 				}
@@ -1236,7 +1264,7 @@ if ( !class_exists( "pluginbuddy_zbzipziparchive" ) ) {
 			} else {
 			
 				// Something fishy - the methods indicated ziparchive but we couldn't find the class
-				pb_backupbuddy::status( 'details', __('ziparchive indicated as available method but ZipArchive class non-existent','it-l10n-backupbuddy' ) );
+				$this->log( 'details', __('ziparchive indicated as available method but ZipArchive class non-existent','it-l10n-backupbuddy' ) );
 				$result = false;
 				
 			}

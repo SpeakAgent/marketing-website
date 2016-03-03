@@ -1,6 +1,9 @@
 <?php
 // @author Dustin Bolton 2012.
 // Incoming variables: $destination
+if ( isset( $destination['disabled'] ) && ( '1' == $destination['disabled'] ) ) {
+	die( __( 'This destination is currently disabled based on its settings. Re-enable it under its Advanced Settings.', 'it-l10n-backupbuddy' ) );
+}
 
 $stash_allfiles_access_timelimit = 60*60*1; // Time, in seconds, to store transient allowing user access to all files in Stash once they have logged in.
 ?>
@@ -65,7 +68,9 @@ if ( pb_backupbuddy::_GET( 'remote_path' ) == '' ) {
 // Lock out all file access without authentication.
 function pb_backupbuddy_stash_pass_form() {
 	echo 'Please enter your iThemes.com Member Password to access your full Stash listing including files stored from other sites:<br><br><br>';
-	echo '<form method="post"><b>iThemes Member Password</b>: &nbsp;&nbsp;&nbsp; <input type="password" name="stash_password" size="20"> &nbsp;&nbsp;&nbsp; <input type="submit" name="submit" value="Authenticate" class="button button-primary"></form>';
+	echo '<form method="post"><b>iThemes Member Password</b>: &nbsp;&nbsp;&nbsp; <input type="password" name="stash_password" size="20"> &nbsp;&nbsp;&nbsp; <input type="submit" name="submit" value="Authenticate" class="button button-primary">';
+	pb_backupbuddy::nonce();
+	echo '</form>';
 	echo '<br><br><br><br>';
 }
 
@@ -75,12 +80,9 @@ if ( pb_backupbuddy::_GET( 'stashhash' ) != '' ) {
 	$stash_hash = pb_backupbuddy::_GET( 'stashhash' );
 }
 if ( ( $remote_path == '/' ) && ( $settings['manage_all_files'] == '1' ) ) {
-	/*
-	$stash_password = get_transient( 'pb_backupbuddy_stashallfiles_' . $current_user->user_login );
-	echo 'pass: ' . $stash_password;
-	*/
 	$stash_password = '';
 	if ( pb_backupbuddy::_POST( 'stash_password' ) != '' ) {
+		pb_backupbuddy::verify_nonce();
 		$stash_password = pb_backupbuddy::_POST( 'stash_password' );
 	}
 	if ( ( $stash_password == '' ) && ( pb_backupbuddy::_GET( 'stashhash' ) == '' ) ) {
@@ -144,6 +146,7 @@ if ( ( ! is_array( $manage_data['credentials'] ) ) || ( '1' == pb_backupbuddy::_
 	if ( ! is_array( $manage_data['credentials'] ) ) { // Re-auth due to authentication failure. Other case could be a manual re-auth.
 		echo '<h3>' . __( 'Stash Authentication Failed - Please log back in', 'it-l10n-backupbuddy' ) . '</h3>';
 		_e( 'This is most often caused by changing your password.', 'it-l10n-backupbuddy' );
+		echo ' ';
 	}
 	_e( 'Log back in with your iThemes.com member account below.', 'it-l10n-backupbuddy' );
 	?>
@@ -206,9 +209,12 @@ if ( pb_backupbuddy::_GET( 'cpy_file' ) != '' ) {
 	pb_backupbuddy::alert( 'The remote file is now being copied to your local backups. If the backup gets marked as bad during copying, please wait a bit then click the `Refresh` icon to rescan after the transfer is complete.' );
 	echo '<br>';
 	pb_backupbuddy::status( 'details',  'Scheduling Cron for creating Stash copy.' );
-	backupbuddy_core::schedule_single_event( time(), pb_backupbuddy::cron_tag( 'process_remote_copy' ), array( 'stash', pb_backupbuddy::_GET( 'cfile' ), $settings ) );
-	spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
-	update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+	backupbuddy_core::schedule_single_event( time(), 'process_remote_copy', array( 'stash', pb_backupbuddy::_GET( 'cpy_file' ), $settings ) );
+	
+	if ( '1' != pb_backupbuddy::$options['skip_spawn_cron_call'] ) {
+		update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+		spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
+	}
 }
 
 
@@ -245,11 +251,11 @@ echo pb_backupbuddy_destination_stash::get_quota_bar( $account_info );
 echo '<div style="text-align: center;">';
 echo '
 <b>Upgrade to get more Stash space:</b> &nbsp;
-<a href="http://ithemes.com/member/cart.php?action=add&id=290" target="_new" style="text-decoration: none; font-weight: 300;">+ 5GB</a>, &nbsp;
-<a href="http://ithemes.com/member/cart.php?action=add&id=290" target="_new" style="text-decoration: none; font-weight: 600; font-size: 1.1em;">+ 10GB</a>, &nbsp;
-<a href="http://ithemes.com/member/cart.php?action=add&id=290" target="_new" style="text-decoration: none; font-weight: 800; font-size: 1.2em;">+ 25GB</a>
+<a href="https://ithemes.com/member/cart.php?action=add&id=290" target="_blank" style="text-decoration: none; font-weight: 300;">+ 5GB</a>, &nbsp;
+<a href="https://ithemes.com/member/cart.php?action=add&id=291" target="_blank" style="text-decoration: none; font-weight: 600; font-size: 1.1em;">+ 10GB</a>, &nbsp;
+<a href="https://ithemes.com/member/cart.php?action=add&id=292" target="_blank" style="text-decoration: none; font-weight: 800; font-size: 1.2em;">+ 25GB</a>
 &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
-<a href="http://ithemes.com/member/panel/stash.php" target="_new" style="text-decoration: none;"><b>Manage Files & Account</b></a>
+<a href="https://sync.ithemes.com/stash/" target="_blank" style="text-decoration: none;"><b>Manage Files & Account</b></a>
 ';
 echo '<br><br></div>';
 
@@ -294,9 +300,9 @@ foreach( $response->body->Contents as $object ) {
 	$file = str_ireplace( $manage_data['subkey'] . $remote_path, '', $object->Key );
 	$last_modified = strtotime( $object->LastModified );
 	$size = (double) $object->Size;
-	if ( substr( $file, 0, 3 ) == 'db/' ) {
+	if ( substr( $file, 0, 3 ) == 'db/' ) { // Database backup
 		$backup_type = 'Database';
-	} elseif ( substr( $file, 0, 5 ) == 'full/' ) {
+	} elseif ( substr( $file, 0, 5 ) == 'full/' ) { // Full backup
 		$backup_type = 'Full';
 	} elseif( $file == 'importbuddy.php' ) {
 		$backup_type = 'ImportBuddy Tool';
@@ -310,14 +316,17 @@ foreach( $response->body->Contents as $object ) {
 		}
 	}
 	
+	// Make list without directory in name.
+	$removePrefixDirs = array(
+		'full/',
+		'db/',
+	);
+	$filesNoDir = str_replace( $removePrefixDirs, '', $file );
+	
 	// Generate array of table rows.
 	$backup_list_temp[$last_modified] = array(
-		$file,
-		pb_backupbuddy::$format->date(
-			pb_backupbuddy::$format->localize_time( $last_modified )
-		) . '<br /><span class="description">(' .
-		pb_backupbuddy::$format->time_ago( $last_modified ) .
-		' ago)</span>',
+		array( $file, $filesNoDir ),
+		pb_backupbuddy::$format->date( pb_backupbuddy::$format->localize_time( $last_modified ) ) . '<br /><span class="description">(' . pb_backupbuddy::$format->time_ago( $last_modified ) . ' ago)</span>',
 		pb_backupbuddy::$format->file_size( $size ),
 		$backup_type
 	);
@@ -328,7 +337,7 @@ foreach( $response->body->Contents as $object ) {
 krsort( $backup_list_temp );
 $backup_list = array();
 foreach( $backup_list_temp as $backup_item ) {
-	$backup_list[ $backup_item[0] ] = $backup_item; //str_replace( 'db/', '', str_replace( 'full/', '', $backup_item ) );
+	$backup_list[ $backup_item[0][0] ] = $backup_item; //str_replace( 'db/', '', str_replace( 'full/', '', $backup_item ) );
 }
 unset( $backup_list_temp );
 

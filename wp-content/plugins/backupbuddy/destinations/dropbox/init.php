@@ -5,8 +5,9 @@
 class pb_backupbuddy_destination_dropbox { // Change class name end to match destination name.
 	
 	public static $destination_info = array(
-		'name'			=>		'Dropbox v1 (legacy)',
+		'name'			=>		'Dropbox (v1)',
 		'description'	=>		'Dropbox.com is a popular online storage provider offering 2 GB of free storage to start with. Premium upgrades are available.',
+		'category'		=>		'legacy', // best, normal, legacy
 	);
 	
 	// Default settings. Should be public static for auto-merging.
@@ -17,6 +18,7 @@ class pb_backupbuddy_destination_dropbox { // Change class name end to match des
 		'directory'		=>		'backupbuddy',
 		'archive_limit'	=>		0,
 		'disable_file_management'	=>		'0',		// When 1, _manage.php will not load which renders remote file management DISABLED.
+		'disabled'					=>		'0',		// When 1, disable this destination.
 	);
 	
 	private static $_init_count = 0;
@@ -25,7 +27,7 @@ class pb_backupbuddy_destination_dropbox { // Change class name end to match des
 	public static function init() {
 		if ( self::$_init_count == 0 ) {
 			$memory = self::memory_guesstimate();
-			self::$destination_info['description'] .= ' BackupBuddy estimates <b>you will be able to transfer backups up to ' . round( $memory['hypothesis'], 0 ) . ' MB with your current memory limit of ' . $memory['limit'] . ' MB</b>. Additionally, Dropbox limits API uploads to 150MB max. <a href="http://dropbox.com" target="_new">Learn more here.</a>';
+			self::$destination_info['description'] .= ' BackupBuddy estimates <b>you will be able to transfer backups up to ' . round( $memory['hypothesis'], 0 ) . ' MB with your current memory limit of ' . $memory['limit'] . ' MB</b>. Additionally, Dropbox limits API uploads to 150MB max. <a href="http://dropbox.com" target="_blank">Learn more here.</a>';
 		}
 		self::$_init_count++;
 	}
@@ -40,6 +42,14 @@ class pb_backupbuddy_destination_dropbox { // Change class name end to match des
 	 *	@return		boolean						True on success, else false.
 	 */
 	public static function send( $settings = array(), $files = array(), $send_id = '' ) {
+		global $pb_backupbuddy_destination_errors;
+		if ( '1' == $settings['disabled'] ) {
+			$pb_backupbuddy_destination_errors[] = __( 'Error #48933: This destination is currently disabled. Enable it under this destination\'s Advanced Settings.', 'it-l10n-backupbuddy' );
+			return false;
+		}
+		if ( ! is_array( $files ) ) {
+			$files = array( $files );
+		}
 		
 		$token = &$settings['token'];
 		$directory = '/' . ltrim( $settings['directory'], '/\\' );
@@ -67,7 +77,7 @@ class pb_backupbuddy_destination_dropbox { // Change class name end to match des
 		
 		pb_backupbuddy::status( 'details', 'Looping through files to send to Dropbox.' );
 		foreach( $files as $file ) {
-			pb_backupbuddy::status( 'details',  'About to put file `' . basename( $file ) . '` (' . pb_backupbuddy::$format->file_size( filesize( $file ) ) . ') to Dropbox cron.' );
+			pb_backupbuddy::status( 'details',  'About to put file `' . basename( $file ) . '` (' . pb_backupbuddy::$format->file_size( filesize( $file ) ) . ') to Dropbox (v1).' );
 			try {
 				$status = $dropbuddy->put_file( $directory . '/' . basename( $file ), $file );
 			} catch( Dropbox_Exception $e ) {

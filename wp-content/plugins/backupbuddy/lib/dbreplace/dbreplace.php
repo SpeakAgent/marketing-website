@@ -4,9 +4,8 @@
  *
  *	Handles replacement of data in a table/database, text or serialized. A database connection should be initialized before instantiation.
  *	
- *	Version: 1.0.0
- *	Author: Dustin Bolton
- *	Author URI: http://dustinbolton.com/
+ *	@since 1.0.0
+ *	@author Dustin Bolton
  *
  *	@param		$status_callback		object		Optional object containing the status() function for reporting back information.
  *	@return		null
@@ -138,7 +137,7 @@ if (!class_exists("pluginbuddy_dbreplace")) {
 			
 			// Prevent trying to replace data with the same data for performance.
 			$this->remove_matching_array_elements( $olds, $news );
-			$key_results = $wpdb->get_results( "show keys from {$table} WHERE Key_name='PRIMARY';", ARRAY_A );
+			$key_results = $wpdb->get_results( "SHOW KEYS FROM `{$table}` WHERE Key_name='PRIMARY';", ARRAY_A );
 			if ( $key_results === false ) {
 				pb_backupbuddy::status( 'details', 'Table `' . $table . '` does not exist; skipping migration of this table.' );
 				return;
@@ -147,7 +146,7 @@ if (!class_exists("pluginbuddy_dbreplace")) {
 			// No primary key found; unsafe to edit this table. @since 2.2.32.
 			if ( count( $key_results ) == 0 ) {
 				pb_backupbuddy::status( 'message', 'Error #9029: Warning only! Table `'.  $table .'` does not contain a primary key; BackupBuddy cannot safely modify the contents of this table. Skipping migration of this table. (serialized()).' );
-				return;
+				return true;
 			}
 			
 			$primary_key = $key_results[0]['Column_name'];
@@ -183,7 +182,7 @@ if (!class_exists("pluginbuddy_dbreplace")) {
 						if ( $column != $primary_key ) {
 							if ( false !== ( $edited_data = $this->replace_maybe_serialized( $value, $olds, $news ) ) ) { // Data changed.
 								$needs_update = true;
-								$sql_update[] = $column . "= '" . mysql_real_escape_string( $edited_data ) . "'";
+								$sql_update[] = $column . "= '" . backupbuddy_core::dbEscape( $edited_data ) . "'";
 							}
 						} else {
 							$primary_key_value = $value;
@@ -357,7 +356,7 @@ if (!class_exists("pluginbuddy_dbreplace")) {
 
 				$data = $wpdb->get_results( "SELECT * FROM `{$table}` LIMIT {$rows_start}," . self::MAX_ROWS_PER_SELECT, ARRAY_A );
 				if ( false === $data ) {
-					pb_backupbuddy::status( 'error', 'ERROR #44545343 ... SQL ERROR: ' . mysql_error() );
+					pb_backupbuddy::status( 'error', 'ERROR #44545343 ... SQL ERROR: ' . $wpdb->last_error );
 				}
 				
 				// Provide an update on progress
@@ -389,7 +388,7 @@ if (!class_exists("pluginbuddy_dbreplace")) {
 							if ( $need_to_update != false ) { // If this isn't our first time here, we need to add a comma.
 								$UPDATE_SQL = $UPDATE_SQL . ',';
 							}
-							$UPDATE_SQL = $UPDATE_SQL . ' ' . $current_column . ' = "' . mysql_real_escape_string( $edited_data ) . '"';
+							$UPDATE_SQL = $UPDATE_SQL . ' ' . $current_column . ' = "' . backupbuddy_core::dbEscape( $edited_data ) . '"';
 							$need_to_update = true; // Only set if we need to update - avoids wasted UPDATE statements.
 						}
 					
@@ -426,7 +425,7 @@ if (!class_exists("pluginbuddy_dbreplace")) {
 		/**
 		 *	recursive_array_replace()
 		 *	
-		 *	Recursively replace text in an array, stepping through arrays within arrays as needed.
+		 *	Recursively replace text in an array, stepping through arrays/objects within arrays/objects as needed.
 		 *	
 		 *	@param		string		$find		Text to find.
 		 *	@param		string		$replace	Text to replace found text with.
@@ -437,17 +436,61 @@ if (!class_exists("pluginbuddy_dbreplace")) {
 		public function recursive_array_replace( $find, $replace, &$data ) {
 			if ( is_array( $data ) ) {
 				foreach ( $data as $key => $value ) {
+					// ARRAYS
 					if ( is_array( $value ) ) {
 						$this->recursive_array_replace( $find, $replace, $data[$key] );
-					} else {
-						// Have to check if it's string to ensure no switching to string for booleans/numbers/nulls - don't need any nasty conversions.
-						if ( is_string( $value ) ) $data[$key] = str_replace( $find, $replace, $value );
+						
+					// STRINGS
+					} elseif ( is_string( $value ) ) {
+						$data[$key] = str_replace( $find, $replace, $value );
+					
+					// OBJECTS
+					} elseif ( is_object( $value ) ) {
+						//error_log( var_export( $data[$key], true ) );
+						$this->recursive_object_replace( $find, $replace, $data[$key] );
+						//error_log( var_export( $data[$key], true ) );
 					}
 				}
-			} else {
-				if ( is_string( $data ) ) $data = str_replace( $find, $replace, $data );
+			} elseif ( is_string( $data ) ) {
+				$data = str_replace( $find, $replace, $data );
+			} elseif ( is_object( $data ) ) {
+				$this->recursive_object_replace( $find, $replace, $data );
 			}
 		}
+		
+		
+		/**
+		 *	recursive_object_replace()
+		 *	
+		 *	Recursively replace text in an object, stepping through objects/arrays within objects/arrays as needed.
+		 *	
+		 *	@param		string		$find		Text to find.
+		 *	@param		string		$replace	Text to replace found text with.
+		 *	@param		reference	&$data		Pass the variable to change the data within.
+		 *	@return		boolean					Always true currently.
+		 *
+		 */
+		public function recursive_object_replace( $find, $replace, &$data ) {
+			if ( is_object( $data ) ) {
+				$vars = get_object_vars( $data );
+				foreach( $vars as $key => $var ) {
+					// ARRAYS
+					if ( is_array( $data->{$key} ) ) {
+						$this->recursive_array_replace( $find, $replace, $data->{$key} );
+					// OBJECTS
+					} elseif ( is_object( $data->{$key} ) ) {
+						$this->recursive_object_replace( $find, $replace, $data->{$key} );
+					// STRINGS
+					} elseif ( is_string( $data->{$key} ) ) {
+						$data->{$key} = str_replace( $find, $replace, $data->{$key} );
+					}
+				}
+			} elseif ( is_string( $data ) ) {
+				$data = str_replace( $find, $replace, $data );
+			} elseif ( is_array( $data ) ) {
+				$this->recursive_array_replace( $find, $replace, $data );
+			}
+		} // End recursive_object_replace().
 		
 		
 		/**

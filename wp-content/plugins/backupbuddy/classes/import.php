@@ -107,11 +107,15 @@ class pb_backupbuddy_import {
 	 */
 	function status_box( $default_text = '', $hidden = false ) {
 		define( 'PB_STATUS', true ); // Tells framework status() function to output future logging info into status box via javascript.
-		$return = '<div id="pb_backupbuddy_status_wrap"><textarea readonly="readonly" id="backupbuddy_messages" wrap="off"';
+		$return = '<div id="pb_backupbuddy_status_wrap" style="padding: 0;"><pre readonly="readonly" id="backupbuddy_messages" wrap="off"';
 		if ( $hidden === true ) {
 			$return .= ' style="display: none; "';
 		}
-		$return .= '>' . $default_text . '</textarea></div>';
+		$return .= '>' . $default_text . '</pre>';
+		$return .= '<div style="text-align: center;">
+			<button class="button button-primary" onClick="backupbuddy_saveLogAsFile();" style="margin-left: auto; margin-right: auto; display: inherit; font-size: 0.9em;">Download Status Log (.txt)</button>
+		</div>';
+		$return .= '</div>';
 		
 		return $return;
 	}

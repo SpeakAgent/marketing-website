@@ -6,9 +6,10 @@ $directories = array(
 	ABSPATH . '',
 	ABSPATH . 'wp-includes/',
 	ABSPATH . 'wp-admin/',
-	ABSPATH . 'wp-content/themes/',
-	ABSPATH . 'wp-content/plugins/',
-	ABSPATH . 'wp-content/',
+	WP_CONTENT_DIR . '/themes/',
+	WP_PLUGIN_DIR . '/',
+	WP_CONTENT_DIR . '/',
+	//ABSPATH . 'wp-content/',
 	rtrim( $uploads_dirs['basedir'], '\\/' ) . '/',
 	ABSPATH . 'wp-includes/',
 	backupbuddy_core::getBackupDirectory(),
@@ -24,6 +25,10 @@ foreach( $directories as $directory ) {
 	$mode_octal_four = '<i>' . __( 'Unknown', 'it-l10n-backupbuddy' ) . '</i>';
 	$owner = '<i>' . __( 'Unknown', 'it-l10n-backupbuddy' ) . '</i>';
 	
+	if ( ! file_exists( $directory ) ) {
+		$mode_octal_four = 'Directory does\'t exist';
+		$owner = 'n/a';
+	}
 	$stats = pluginbuddy_stat::stat( $directory );
 	if ( false !== $stats ) {
 		$mode_octal_four = $stats['mode_octal_four'];

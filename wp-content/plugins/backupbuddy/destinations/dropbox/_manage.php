@@ -1,6 +1,10 @@
 <?php
 //pb_backupbuddy::$ui->title( 'Dropbox' );
 
+if ( isset( $destination['disabled'] ) && ( '1' == $destination['disabled'] ) ) {
+	die( __( 'This destination is currently disabled based on its settings. Re-enable it under its Advanced Settings.', 'it-l10n-backupbuddy' ) );
+}
+
 require_once( pb_backupbuddy::plugin_path() . '/destinations/dropbox/lib/dropbuddy/dropbuddy.php' );
 $dropbuddy = new pb_backupbuddy_dropbuddy( $destination['token'] );
 if ( $dropbuddy->authenticate() === true ) {
@@ -47,7 +51,7 @@ if ( !empty( $_POST['delete_file'] ) ) {
 
 
 // Convert time string to timestamp.
-if ( is_array( $meta_data['contents'] ) ) {
+if ( isset( $meta_data['contents'] ) && is_array( $meta_data['contents'] ) ) {
 	foreach( $meta_data['contents'] as &$backup ) {
 		$backup['modified'] = strtotime( $backup['modified'] );
 	}
@@ -63,9 +67,12 @@ if ( is_array( $meta_data['contents'] ) ) {
 if ( !empty( $_GET['cpy_file'] ) ) {
 	pb_backupbuddy::alert( __( 'The remote file is now being copied to your local backups. If the backup gets marked as bad during copying, please wait a bit then click the `Refresh` icon to rescan after the transfer is complete.', 'it-l10n-backupbuddy' ) );
 	pb_backupbuddy::status( 'details',  'Scheduling Cron for creating Dropbox copy.' );
-	backupbuddy_core::schedule_single_event( time(), pb_backupbuddy::cron_tag( 'process_dropbox_copy' ), array( $_GET['destination_id'], $_GET['cpy_file'] ) );
-	spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
-	update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+	backupbuddy_core::schedule_single_event( time(), 'process_dropbox_copy', array( $_GET['destination_id'], $_GET['cpy_file'] ) );
+
+	if ( '1' != pb_backupbuddy::$options['skip_spawn_cron_call'] ) {
+		update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+		spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
+	}
 }
 
 //stecho '<h3>', __('Viewing', 'it-l10n-backupbuddy' ),' `' . $destination['title'] . '` (' . $destination['type'] . ')</h3>';

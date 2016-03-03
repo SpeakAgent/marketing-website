@@ -23,14 +23,14 @@ pb_backupbuddy::load_style( 'filetree.css' );
 			},
 			function(file) {
 				if ( ( file == 'wp-config.php' ) ) {
-					alert( '<?php _e('You cannot exclude wp-config.php.', 'it-l10n-backupbuddy' );?>' );
+					alert( "<?php _e('You cannot exclude wp-config.php.', 'it-l10n-backupbuddy' );?>" );
 				} else {
 					jQuery( '#pb_backupbuddy_profiles__<?php echo $profile_id; ?>__excludes' ).val( file + "\n" + jQuery( '#pb_backupbuddy_profiles__<?php echo $profile_id; ?>__excludes' ).val() );
 				}
 			},
 			function(directory) {
 				if ( ( directory == '/wp-content/' ) || ( directory == '/wp-content/uploads/' ) || ( directory == '<?php echo '/' . str_replace( ABSPATH, '', backupbuddy_core::getBackupDirectory() ); ?>' ) || ( directory == '<?php echo '/' . str_replace( ABSPATH, '', backupbuddy_core::getTempDirectory() ); ?>' ) ) {
-					alert( '<?php _e('You cannot exclude /wp-content/, /wp-content/uploads/, or BackupBuddy directories.  However, you may exclude subdirectories within these. BackupBuddy directories such as backupbuddy_backups are automatically excluded and cannot be added to exclusion list.', 'it-l10n-backupbuddy' );?>' );
+					alert( "<?php _e('You cannot exclude /wp-content/, /wp-content/uploads/, or BackupBuddy directories.  However, you may exclude subdirectories within these. BackupBuddy directories such as backupbuddy_backups are automatically excluded and cannot be added to exclusion list.', 'it-l10n-backupbuddy' );?>" );
 				} else {
 					jQuery( '#pb_backupbuddy_profiles__<?php echo $profile_id; ?>__excludes' ).val( directory + "\n" + jQuery( '#pb_backupbuddy_profiles__<?php echo $profile_id; ?>__excludes' ).val() );
 				}

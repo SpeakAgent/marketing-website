@@ -66,17 +66,17 @@ if ( !class_exists( "pluginbuddy_wpdbutils" ) ) {
 		 */
 		public function __construct( &$db ) { // removed wpdb type hint Jan 9, 2013.
 			
-			pb_backupbuddy::status( 'details', 'Database kicker database object class: `' . get_class( $db ) . '`.' );
 			$this->_db = &$db;
 			
 			// As of WP 3.9 mysqli may be used.
 			if ( isset( $this->_db->use_mysqli ) && ( true === $this->_db->use_mysqli ) ) {
-				pb_backupbuddy::status( self::STATUS_TYPE_DETAILS, __( 'Database is being accessed by mysqli.', 'it-l10n-backupbuddy' ) );
 				$this->_using_mysqli = true;
+				$type = 'mysqli';
 			} else {
-				pb_backupbuddy::status( self::STATUS_TYPE_DETAILS, __( 'Database is being accessed by mysql.', 'it-l10n-backupbuddy' ) );
+				$type = 'mysql';
 			}
 			
+			pb_backupbuddy::status( self::STATUS_TYPE_DETAILS, 'Database kicker loaded. Database object class: `' . get_class( $db ) . '` with database of type `' . $type . '`.' );
 		}
 		
 		

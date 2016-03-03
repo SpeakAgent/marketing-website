@@ -1,5 +1,7 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
+
 /* migration_picker()
  *
  * Same as destination picker but in migration mode (only limited destinations are available).

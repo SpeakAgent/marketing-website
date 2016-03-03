@@ -19,25 +19,23 @@ class Ithemes_Sync_Verb_Backupbuddy_Delete_Destination extends Ithemes_Sync_Verb
 	public function run( $arguments ) {
 		$arguments = Ithemes_Sync_Functions::merge_defaults( $arguments, $this->default_arguments );
 		
-		require_once( pb_backupbuddy::plugin_path() . '/destinations/bootstrap.php' );
-		$response = pb_backupbuddy_destinations::delete( $arguments['id'], true );
-		if ( true === $response ) {
-			
+		if ( ! isset( pb_backupbuddy::$options['remote_destinations'][ $arguments['id'] ] ) ) {
 			return array(
-				'api' => '0',
-				'status' => 'ok',
-				'message' => 'Destination deleted.',
-			);
-			
-		} else {
-			
-			return array(
-				'api' => '0',
+				'api' => '1',
 				'status' => 'error',
-				'message' => 'Error #384783783: Failure deleting destination.',
+				'message' => 'Error #847383: Invalid destination ID. Not found.',
 			);
-			
 		}
+		
+		unset( pb_backupbuddy::$options['remote_destinations'][ $arguments['id'] ] );
+		pb_backupbuddy::save();
+		
+		return array(
+			'api' => '1',
+			'status' => 'ok',
+			'message' => 'Destination deleted.',
+			'destination_id' => $arguments['id'],
+		);
 		
 	} // End run().
 	

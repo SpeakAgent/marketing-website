@@ -206,18 +206,18 @@ class CF_Authentication
                 $this->account_name, $this->auth_host);
 
         if ($status == 401) {
-            //throw new AuthenticationException("Invalid username or access key.");
+            throw new AuthenticationException("Invalid username or access key.");
 			return false;
         }
         if ($status != 204) {
-           // throw new InvalidResponseException(
-            //    "Unexpected response (".$status."): ".$reason);
+            throw new InvalidResponseException(
+                "Unexpected response (".$status."): ".$reason);
 			return false;
         }
 
         if (!($surl || $curl) || !$atoken) {
-            //throw new InvalidResponseException(
-              //  "Expected headers missing from auth service.");
+            throw new InvalidResponseException(
+                "Expected headers missing from auth service.");
 			  return false;
         }
         $this->storage_url = $surl;

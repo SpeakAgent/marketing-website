@@ -38,10 +38,12 @@ if ( true !== $result ) {
 	pb_backupbuddy::alert( 'Failed unzipping archive.' );
 	$failed = true;
 } else { // Reported success; verify extraction.
-	if ( !file_exists( $destination_directory . 'wp-config.php' ) ) {
+	/* Breaks MS import if wp-config was in a parent directory.
+	if ( ! file_exists( $destination_directory . 'wp-config.php' ) ) {
 		$this->status( 'error', 'Error #9004: Key files missing. The unzip process reported success but `' . $destination_directory . 'wp-config.php' . '` was not found in the extracted files. Verify that this is a FULL backup. If so then the unzip process either failed or the zip file is not a proper BackupBuddy backup.' );
 		return false;
 	}
+	*/
 	$this->status( 'details', 'Success extracting Zip File "' . ABSPATH . $this->import_options['file'] . '" into "' . ABSPATH . '".' );
 	$failed = false;
 }
