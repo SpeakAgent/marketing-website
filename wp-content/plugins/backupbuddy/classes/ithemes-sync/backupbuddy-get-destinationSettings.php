@@ -14,16 +14,17 @@ class Ithemes_Sync_Verb_Backupbuddy_Get_DestinationSettings extends Ithemes_Sync
 		if ( isset( pb_backupbuddy::$options['remote_destinations'][ $arguments['id'] ] ) ) {
 			
 			return array(
-				'api' => '0',
+				'api' => '1',
 				'status' => 'ok',
 				'message' => 'Destination settings retrieved.',
 				'settings' => pb_backupbuddy::$options['remote_destinations'][ $arguments['id'] ],
+				'destination_id' => $arguments['id'],
 			);
 			
 		} else {  // Invalid destination ID.
 			
 			return array(
-				'api' => '0',
+				'api' => '1',
 				'status' => 'error',
 				'message' => 'Error #327783: Invalid destination ID.',
 			);

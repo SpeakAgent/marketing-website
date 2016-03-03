@@ -105,16 +105,13 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 	}
 
 	/**
-	 *	pb_backupbuddy_zip_helper Class
+	 *	pb_backupbuddy_zip_monitor Class
 	 *
 	 *	Class that is used during a zip archive file build to monitor the progress
-	 *	of the build and provide optional logging and actions to keep the process
-	 *	running. This is a parent class which a method will extend for a method
-	 *	specific class that contains additional functions, etc. to manage the specific
-	 *	needs of that method.
+	 *	of the build and adjust build parameters accordingly.
 	 *
 	 */
-	abstract class pb_backupbuddy_zip_helper {
+	 class pb_backupbuddy_zip_monitor {
 	
 		// Enumerate the burst modes
 		const ZIP_UNKNOWN_BURST = 0;
@@ -128,13 +125,6 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		
 		const ZIP_DEFAULT_BURST_MAX_PERIOD = 30;
 		const ZIP_DEFAULT_BURST_THRESHOLD_PERIOD = 10;
-		
-		const ZIP_DEFAULT_EXECUTION_MAX_PERIOD = 30;
-		const ZIP_DEFAULT_EXECUTION_THRESHOLD_PERIOD = 10;
-
-		const ZIP_DEFAULT_MONITOR_THRESHOLD_PERIOD = 10;
-
-		const ZIP_DEFAULT_TICKLE_THRESHOLD_PERIOD = 10;
 	
 		protected $_added_dir_count = 0;
 		protected $_added_file_count = 0;
@@ -148,27 +138,45 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		protected $_burst_size_max = 0;
 		protected $_burst_current_size_threshold = 0;
 		
-		protected $_execution_threshold_period = 0;
-		protected $_execution_start_time = 0;
-		protected $_execution_max_period = 0;
-		
-		protected $_monitor_threshold_period = 0;
-		protected $_monitor_start_time = 0;
-		protected $_monitoring_usage = false;
-		protected $_start_user_time = 0;
-		protected $_elapsed_user_time = 0;
-		
-		protected $_tickle_threshold_period = 0;
-		protected $_tickle_start_time = 0;
-		protected $_server_tickling = false;
-		protected $_server_tickler = '';
-		
 		protected $_burst_mode = self::ZIP_UNKNOWN_BURST;
-		protected $_reported = false;
 		
-		public function __construct() {
+		protected $_creation_time = 0;
 		
+		protected $_burst_content_size = 0;
+		protected $_burst_content_count = 0;
+		protected $_burst_count = 0;
+		protected $_burst_content_complete = false;
+		protected $_last_burst_duration = 0;
+		protected $_last_burst_size = 0;
+
+         /**
+         * The logger we will use
+         * 
+         * @var logger	object
+         */
+		protected $_logger = null;
+	
+        /**
+         * Our object instance
+         * 
+         * @var $_instance 	object
+         */
+		protected static $_instance = null;
+	
+		public function __construct( &$parent = null ) {
+		
+			// Inherit the parent logger by default (if it has one), caller may override after instantiated
+			if ( $parent && method_exists( $parent, 'get_logger' ) ) {
+			
+				$this->set_logger( $parent->get_logger() );
+				
+			}
+		
+			self::$_instance = $this;
+			
 			$now = time();
+			
+			$this->set_creation_time( $now );
 			
 			$this->set_burst_start_time( $now );
 			$this->set_burst_max_period( 'auto' );
@@ -178,26 +186,40 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 			$this->set_burst_size_max();
 			$this->set_burst_current_size_threshold( $this->get_burst_size_min() );
 			
-			$this->set_execution_start_time( $now );
-			$this->set_execution_max_period( 'auto' );
-			//$this->set_execution_threshold_period( 'auto' ); // This is done automatically by set_execution_max_period()
-
-			$this->set_monitor_start_time( $now );
-			$this->set_monitor_threshold_period( self::ZIP_DEFAULT_MONITOR_THRESHOLD_PERIOD );
-
-			$this->set_tickle_start_time( $now );
-			$this->set_tickle_threshold_period( self::ZIP_DEFAULT_TICKLE_THRESHOLD_PERIOD );
-
-			$this->initialize_monitoring_usage();
-			
-			$this->set_server_tickling( true );
 			$this->set_burst_mode( self::ZIP_MULTI_BURST );
-			$this->_server_tickler = '<!--' . str_shuffle( substr( str_repeat( implode( '', range( 'a', 'z' ) ), 40 ), 0, 1024 ) ) . '-->' . chr(13) . chr(10);
+			
+			$this->log_parameters();
 
 		}
 		
 		public function __destruct() {
 		
+			self::$_instance = null;
+
+		}
+		
+		/**
+		 * 
+		 *	get_instance()
+		 *
+		 *	If the object is already created then simply return the instance else
+		 *	create an object and return the instance.
+		 *	Currently only one instance is allowed at a time but currently there is
+		 *	no scenario that would require more than one at any time.
+		 *
+		 *	@return		object					This object instance	
+		 *
+		 */
+		public static function get_instance() {
+		
+			if ( null === self::$_instance ) {
+			
+				self::$_instance = new self;
+				
+			}
+		
+			return self::$_instance;
+			
 		}
 		
 		// Methods for keeping track of burst content
@@ -252,7 +274,9 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		
 		public function set_burst_current_size_threshold( $size = self::ZIP_DEFAULT_BURST_MIN_SIZE ) {
 		
-			$this->_burst_current_size_threshold = $size;
+			// As we are dealing in doubles but we only really want the integer
+			// part so use floor() whenever the value is set
+			$this->_burst_current_size_threshold = (double)floor( $size );
 			return $this;
 			
 		}
@@ -265,7 +289,8 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		
 		public function set_burst_size_min( $size = self::ZIP_DEFAULT_BURST_MIN_SIZE) {
 		
-			$this->_burst_size_min = $size;
+			$this->_burst_size_min = (double)floor( $size );
+			( $size > $this->get_burst_size_max() ) ? $this->set_burst_size_max( $size ) : false ;
 			return $this;
 		
 		}
@@ -278,9 +303,193 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		
 		public function set_burst_size_max( $size = self::ZIP_DEFAULT_BURST_MAX_SIZE) {
 		
-			$this->_burst_size_max = $size;
+			$this->_burst_size_max = (double)floor( $size );
+			( $size < $this->get_burst_size_min() ) ? $this->set_burst_size_min( $size ) : false ;
 			return $this;
 		
+		}
+
+		// Methods for handling a burst
+		
+		public function get_burst_count() {
+		
+			return $this->_burst_count;
+		}
+		
+		public function get_burst_content_size() {
+		
+			return $this->_burst_content_size;
+		
+		}
+		
+		public function get_burst_content_count() {
+		
+			return $this->_burst_content_count;
+		
+		}
+		
+		/**
+		 * 
+		 *	burst_begin()
+		 *
+		 *	Initializes to begin putting together content for a new burst
+		 *
+		 *	@return		none
+		 *
+		 */
+		public function burst_begin() {
+		
+			$this->_burst_content_size = (double)0;
+			$this->_burst_content_count = 0;
+			++$this->_burst_count;
+			$this->_burst_content_complete = false;
+			$this->_last_burst_duration = 0;
+			$this->_last_burst_size = (double)0;
+		
+		}
+		
+		/**
+		 * 
+		 *	burst_end()
+		 *
+		 *	Wrap up after the end of the current burst
+		 *
+		 *	@return		none
+		 *
+		 */
+		public function burst_end() {
+		
+		}
+		
+		/**
+		 * 
+		 *	burst_content_added()
+		 *
+		 *	Gives us information on what has just been added to burst content so we
+		 *	can assess the progress against our criteria for completion of the current
+		 *	burst content.
+		 *
+		 *	@param		array		$content	Details about the item just added
+		 *	@return		none
+		 *
+		 */
+		public function burst_content_added( $content ) {
+		
+			// Increment the appropriate count
+			( true === $content[ 'directory' ] ) ? $this->incr_added_dir_count() : $this->incr_added_file_count() ;
+			
+			// Increment the total size of current burst
+			$this->_burst_content_size += (double)$content[ 'size' ];
+			++$this->_burst_content_count;
+			
+			$this->_burst_content_complete = ( $this->get_burst_current_size_threshold() <= $this->_burst_content_size );
+			
+		}
+		
+		/**
+		 * 
+		 *	burst_content_complete()
+		 *
+		 *	Return whether or not we consider the burst content to be complete for the
+		 *	current burst
+		 *
+		 *	@return		bool					True if complete, false otherwise
+		 *
+		 */
+		public function burst_content_complete() {
+		
+			return $this->_burst_content_complete;
+		
+		}
+		
+		/**
+		 * 
+		 *	burst_start()
+		 *
+		 *	Signals that the burst activity is about to be started so we can start to
+		 *	monitor it for the purposes of assessing how it went and how that will impact
+		 *	the next burst
+		 *
+		 *	@return		none
+		 *
+		 */
+		public function burst_start() {
+		
+			$this->set_burst_start_time( time() ); // Note when we started
+		
+		}
+		
+		/**
+		 * 
+		 *	burst_stop()
+		 *
+		 *	Signals that the burst activity has completed so we can stop the monitoring
+		 *	and decide how the next burst is going to go
+		 *
+		 *	@return		none
+		 *
+		 */
+		public function burst_stop() {
+		
+			$this->set_burst_stop_time();
+			
+			// Update the threshold in case we have more to do
+			$this->update_burst_current_size_threshold();
+			
+		}
+		
+		/**
+		 * 
+		 *	update_burst_current_size_threshold()
+		 *
+		 *	Signals that the burst activity has completed so we can stop the monitoring
+		 *	and decide how the next burst is going to go
+		 *
+		 *	Current algorithm is quite simple:
+		 *	Nbt - New Burst Threshold
+		 *	Cbt - Current Burst Threshold
+		 *	Lbd - Last Burst Duration
+		 *	Bdmp - Burst Default Max Period
+		 *	
+		 *	Nbt = Cbt + ( Cbt * ( ( Bdmp - Ldb ) / Bdmp ) )
+		 *	
+		 *	Which basically means the longer the burst of the current size threshold takes
+		 *	to complete the smaller the amount by which we increase the burst size threshold.
+		 *	Additionally, if the actual last burst duration _exceeds_ the maximum time we want
+		 *	to allow a burst to run then the increment factor will become negative and we'll
+		 *	reduce the burst size threshold, the bigger the overrun the bigger the reduction.
+		 *	Finally we'll make sure that we keep the threshold within some min/max limits
+		 *	which are currently predefined but in theory later we could make these adaptive
+		 *	and/or allow the user to set them to allow for specific server capabilities - i.e.,
+		 *	if the server is very fast then the high cap could be raised.
+		 *
+		 *	Note: an additional option would be to allow the user to set an initial
+		 *	threshold size and if that were very large (or maybe 0 meaning no limit) then
+		 *	the process would revert to a single burst.
+		 *
+		 *	@return		none
+		 *
+		 */
+		public function update_burst_current_size_threshold() {
+		
+			$last_burst_duration = ( $this->get_burst_stop_time() - $this->get_burst_start_time() );
+			$last_burst_duration = ( 1 > $last_burst_duration ) ? 1 : $last_burst_duration;
+			
+			// Calculate the increment factor - this will be +ve if the last burst took less
+			// than our allowed maximum time (so we can try increasing the burst content size) or
+			// -ve if the burst took longer than we would like (in which case we'll reduce the
+			// burst content size).
+			$factor = (float)( ( (float)$this->get_burst_max_period() - (float)$last_burst_duration ) / (float)$this->get_burst_max_period() );
+			
+			// Calculate a new burst size threshold - under extreme conditions it could come
+			// out negative but in any case we're then going to make sure it is within certain
+			// sensible bounds.
+			$this->set_burst_current_size_threshold ( (double)( $this->get_burst_current_size_threshold() + ( (float)$this->get_burst_current_size_threshold() * (float)$factor) ) );
+
+			// Now let's make sure we stay within min/max threshoild limits
+			$this->set_burst_current_size_threshold ( ( $this->get_burst_size_min() > $this->get_burst_current_size_threshold() ) ? $this->get_burst_size_min() : $this->get_burst_current_size_threshold() );
+			$this->set_burst_current_size_threshold ( ( $this->get_burst_current_size_threshold() < $this->get_burst_size_max() ) ? $this->get_burst_current_size_threshold() : $this->get_burst_size_max() );
+			
 		}
 
 		// Methods for handling the burst period
@@ -310,7 +519,7 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 						}
 					
 						// Bit of an arbitrary proportion...
-						$this->_burst_threshold_period = ( $burst_max_period / 3 );
+						$this->_burst_threshold_period = (int)( $burst_max_period / 3 );
 						break;
 						
 					default:
@@ -341,6 +550,25 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 			( 0 === $time ) ? $this->_burst_start_time = time() : $this->_burst_start_time = $time ;
 			return $this;
 		
+		}
+	
+		public function get_creation_time() {
+		
+			return $this->_creation_time;
+		
+		}
+	
+		public function set_creation_time( $time = 0 ) {
+		
+			( 0 === $time ) ? $this->_creation_time = time() : $this->_creation_time = $time ;
+			return $this;
+		
+		}
+		
+		public function get_elapsed_time() {
+			
+			return ( time() - $this->get_creation_time() );
+			
 		}
 	
 		public function get_burst_stop_time() {
@@ -374,8 +602,74 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		// we do use this (but we don't use the burst threshold period in any way).
 		public function set_burst_max_period( $period = self::ZIP_DEFAULT_BURST_MAX_PERIOD, $auto_set_threshold = true ) {
 		
+			// Get the originally configured value if we can.
+			// Returned values may be false or an integer as a string.
+			// If false we want to keep it as false and we'll use our
+			// default; if 0 | -1 then we'll set as larger integer;
+			// otherwise if it is a numeric value and +ve we'll use it
+			// otherwise set to false.
 			$configured_execution_time = @get_cfg_var( 'max_execution_time' );
+			
+			$cfg_var_map = array(	false => false,
+									"-1" => (int)PHP_INT_MAX,
+									"0" => (int)PHP_INT_MAX,
+									"" => false,
+								);
+			if ( array_key_exists( $configured_execution_time, $cfg_var_map ) ) {
+				
+				// "Special" value, map it
+				$configured_execution_time = $cfg_var_map[ $configured_execution_time ];
+				
+			} else {
+				
+				// "Ordinary" value but must be numeric and +ve
+				if ( is_numeric( $configured_execution_time ) && ( 0 < (int)$configured_execution_time )) {
+					
+					$configured_execution_time = (int)$configured_execution_time;
+					
+				} else {
+					
+					$configured_execution_time = false;
+					
+				}
+				
+			}
+			
+			// Get the current value if we can.
+			// Returned values may be false or an integer as a string.
+			// If false we want to keep it as false and we'll use our
+			// default; if 0 | -1 then we'll set as larger integer;
+			// if "7200" we have to assume it's because we set that
+			// so make it false; otherwsie if it is a numeric value
+			// and +ve we'll use it; otherwise set false.
 			$current_execution_time = @ini_get( 'max_execution_time' );
+
+			$ini_get_map = array(	false => false,
+									"-1" => (int)PHP_INT_MAX,
+									"0" => (int)PHP_INT_MAX,
+									"7200" => false,
+									"" => false,
+								);
+			if ( array_key_exists( $current_execution_time, $ini_get_map ) ) {
+				
+				// "Special" value, map it
+				$current_execution_time = $ini_get_map[ $current_execution_time ];
+				
+			} else {
+				
+				// "Ordinary" value but must be numeric and +ve
+				if ( is_numeric( $current_execution_time ) && ( 0 < (int)$current_execution_time )) {
+					
+					$current_execution_time = (int)$current_execution_time;
+					
+				} else {
+					
+					$current_execution_time = false;
+					
+				}
+				
+			}
+		
 		
 			if ( true === is_string( $period ) ) {
 			
@@ -383,11 +677,9 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 				
 					case 'auto':
 						// Try for the currently set execution time
-						if ( ( false === $current_execution_time ) ||
-						     ( 0 === (int) $current_execution_time ) ||
-						     ( 7200 === (int) $current_execution_time ) ) {
+						if ( false === $current_execution_time ) {
 						
-							// Couldn't get a value or was 0 or 7200 so try for configured value
+							// Couldn't get a value so try for configured value
 							if ( false === $configured_execution_time ) {
 						
 								// Couldn't get a configured value for some reason so use default
@@ -396,14 +688,16 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 							} else {
 						
 								// Got a configured value so use it
-								$this->_burst_max_period = (int) $configured_execution_time;
+								// Subtract 10% to give some headroom (only when value is derived like this
+								// but not if the caller configured a value as below)
+								$this->_burst_max_period = (int)( ( (int) $configured_execution_time / 10 ) * 9 );
 						
 							}
 							
 						} else {
 						
 							// Got a non-zero current execution time so use it
-							$this->_burst_max_period = (int) $current_execution_time;
+							$this->_burst_max_period = (int)( ( (int) $current_execution_time / 10 ) * 9 );
 						
 						}
 						
@@ -422,256 +716,20 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 				
 				}
 			
-			} else {
+			} elseif ( is_numeric( $period ) && ( 0 < $period ) )  {
 			
-				// Assume integer?
-				$this->_burst_max_period = $period;
-			
-			}
-		
-			return $this;
-		
-		}
-	
-		// Methods for handling the execution time management
-
-		public function get_execution_threshold_period() {
-		
-			return $this->_execution_threshold_period;
-		
-		}
-	
-		public function set_execution_threshold_period( $period = self::ZIP_DEFAULT_EXECUTION_THRESHOLD_PERIOD ) {
-		
-			$execution_max_period = 0;
-		
-			if ( true === is_string( $period ) ) {
-			
-				switch ( $period ) {
-				
-					case 'auto':
-						// If auto then set based on execution max period
-						if ( 0 === ( $execution_max_period = $this->get_execution_max_period() ) ) {
-						
-							// Not set yet so we need to set it with auto
-							// Ensure we don't get into a recursive loop...
-							$execution_max_period = $this->set_execution_max_period( 'auto', false )->get_execution_max_period();
-						
-						}
-					
-						// Bit of an arbitrary proportion...
-						$this->_execution_threshold_period = ( $execution_max_period / 3 );
-						break;
-						
-					default:
-						// Unknown mode so use default value
-						$this->_execution_threshold_period = self::ZIP_DEFAULT_EXECUTION_THRESHOLD_PERIOD;
-				
-				}
+				$this->_burst_max_period = (int)$period;
 			
 			} else {
-			
-				// Assume integer?
-				$this->_execution_threshold_period = $period;
+				
+				$this->_burst_max_period = self::ZIP_DEFAULT_BURST_MAX_PERIOD;
 				
 			}
-			
-			return $this;
-		
-		}
-	
-		public function get_execution_start_time() {
-		
-			return $this->_execution_start_time;
-		
-		}
-	
-		public function set_execution_start_time( $time = 0 ) {
-		
-			( 0 === $time ) ? $this->_execution_start_time = time() : $this->_execution_start_time = $time ;
-			return $this;
-		
-		}
-	
-		public function get_execution_max_period() {
-		
-			return $this->_execution_max_period;
-		
-		}
-	
-		public function set_execution_max_period( $period = self::ZIP_DEFAULT_EXECUTION_MAX_PERIOD, $auto_set_threshold = true ) {
-		
-			$configured_execution_time = @get_cfg_var( 'max_execution_time' );
-			$current_execution_time = @ini_get( 'max_execution_time' );
-		
-			if ( true === is_string( $period ) ) {
-			
-				switch ( $period ) {
-				
-					case 'auto':
-						// Try for the currently set execution time
-						if ( ( false === $current_execution_time ) ||
-						     ( 0 === (int) $current_execution_time ) ||
-						     ( 7200 === (int) $current_execution_time ) ) {
-						
-							// Couldn't get a value or was 0 or 7200 so try for configured value
-							if ( false === $configured_execution_time ) {
-						
-								// Couldn't get a configured value for some reason so use default
-								$this->_execution_max_period = self::ZIP_DEFAULT_EXECUTION_MAX_PERIOD;
-							
-							} else {
-						
-								// Got a configured value so use it
-								$this->_execution_max_period = (int) $configured_execution_time;
-						
-							}
-							
-						} else {
-						
-							// Got a non-zero current execution time so use it
-							$this->_execution_max_period = (int) $current_execution_time;
-						
-						}
-						
-						// If set by auto then make sure we (re)set threshold as auto _unless_
-						// told not to...
-						if ( true === $auto_set_threshold ) {
-						
-							$this->set_execution_threshold_period( 'auto' );
-							
-						}
-						break;
-					
-					default:
-						// Unknown mode so use default value
-						$this->_execution_max_period = self::ZIP_DEFAULT_EXECUTION_MAX_PERIOD;
-				
-				}
-			
-			} else {
-			
-				// Assume integer?
-				$this->_execution_max_period = $period;
-			
-			}
 		
 			return $this;
 		
 		}
-		
-		// Methods for handling the monitoring action
 	
-		public function get_monitor_threshold_period() {
-		
-			return $this->_monitor_threshold_period;
-		
-		}
-	
-		public function set_monitor_threshold_period( $period = self::ZIP_DEFAULT_MONITOR_THRESHOLD_PERIOD ) {
-		
-			$this->_monitor_threshold_period = $period;
-			return $this;
-		
-		}
-	
-		public function get_monitor_start_time() {
-		
-			return $this->_monitor_start_time;
-		
-		}
-	
-		public function set_monitor_start_time( $time = 0 ) {
-		
-			( 0 === $time ) ? $this->_monitor_start_time = time() : $this->_monitor_start_time = $time ;
-			return $this;
-		
-		}
-		
-		public function initialize_monitoring_usage( $reset = true ) {
-		
-			$usage_data = array();
-		
-			// Must determine if we can monitor usage data
-			if ( function_exists( 'getrusage' ) && is_callable( 'getrusage' ) ) {
-				
-				$this->_monitoring_usage = true;
-		
-				// We need to know the user time value at the start so we can monitor how
-				// much actual user time we are using (which counts against max_execution_time)
-				// We call this when object is created to maek sure the init is done but we can
-				// make a later call closer to when we wnt to start monitoring it and that will
-				// reset the start time.
-				if ( ( 0 === $this->_start_user_time ) || ( true === $reset ) ) {
-			
-					$usage_data = getrusage();
-					$this->_start_user_time = $usage_data[ 'ru_utime.tv_sec' ];
-			
-				}
-			
-			}
-			
-		}
-		
-		public function is_monitoring_usage() {
-		
-			return ( true === $this->_monitoring_usage );
-		
-		}
-		
-		// Methods for handling the server tickling action
-		
-		public function get_tickle_threshold_period() {
-		
-			return $this->_tickle_threshold_period;
-		
-		}
-	
-		public function set_tickle_threshold_period( $period = self::ZIP_DEFAULT_TICKLE_THRESHOLD_PERIOD ) {
-		
-			$this->_tickle_threshold_period = $period;
-			return $this;
-		
-		}
-	
-		public function get_tickle_start_time() {
-		
-			return $this->_tickle_start_time;
-		
-		}
-	
-		public function set_tickle_start_time( $time = 0 ) {
-		
-			( 0 === $time ) ? $this->_tickle_start_time = time() : $this->_tickle_start_time = $time ;
-			return $this;
-		
-		}
-	
-		public function set_server_tickling( $tickle = true ) {
-		
-			$this->_server_tickling = $tickle;
-			return $this;
-		
-		}
-		
-		public function get_server_tickling() {
-		
-			return $this->_server_tickling;
-		
-		}
-		
-		public function is_server_tickling() {
-		
-			return ( true === $this->_server_tickling );
-		
-		}
-		
-		public function get_server_tickler() {
-		
-			return $this->_server_tickler;
-		
-		}
-		
 		// General Methods
 		
 		public function set_burst_mode( $burst_mode = self::ZIP_MULTI_BURST ) {
@@ -692,159 +750,54 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 			return ( self::ZIP_MULTI_BURST === $this->_burst_mode );
 			
 		}
+
+		// Log our setup parameters
+		public function log_parameters() {
 		
-		public function connection_status_tostring( $status ) {
-		
-			$status_name = '';
+			// Need to preformat the potentially very large doubles for printing as
+			// sprintf formatting cannot do it - in particular a large double to print
+			// as integer like on a 32 bit system
+			$burst_max_period = number_format( $this->get_burst_max_period(), 0, ".", "" );
+			$burst_threshold_period = number_format( $this->get_burst_threshold_period(), 0, ".", "" );
+			$burst_size_min = number_format( $this->get_burst_size_min(), 0, ".", "" );
+			$burst_size_max = number_format( $this->get_burst_size_max(), 0, ".", "" );
+			$burst_current_size_threshold = number_format( $this->get_burst_current_size_threshold(), 0, ".", "" );
 			
-			switch ( $status ) {
-			
-				case CONNECTION_NORMAL:
-					$status_name = 'Normal';
-					break;
-				case CONNECTION_ABORTED:
-					$status_name = 'Aborted';
-					break;
-				case CONNECTION_TIMEOUT:
-					$status_name = 'Timeout';
-					break;
-				default:
-					$status_name = 'Unknown';
-			
-			}
-			
-			return $status_name;
-		
+			$this->log( 'details', sprintf( __('Zip process reported: : Burst max/threshold periods: %1$ss/%2$ss','it-l10n-backupbuddy' ), $burst_max_period, $burst_threshold_period ) );
+			$this->log( 'details', sprintf( __('Zip process reported: : Burst size min/max/threshold: %1$s/%2$s/%3$s','it-l10n-backupbuddy' ), $burst_size_min, $burst_size_max, $burst_current_size_threshold ) );
+
+			return $this;
+
 		}
-		
-		// Methods called by specific helper to invoke actions
-		
-		protected function monitor_progress( $increment = 100 ) {
-		
-			if ( 0 === ( ( $this->get_added_file_count() + $this->get_added_dir_count() ) % $increment ) ) {
+		public function log( $level, $message ) {
 			
-				pb_backupbuddy::status( 'details', sprintf( __('Zip process reported: Accumulated bursts requested %1$s (directories + files) items to be added to backup zip archive','it-l10n-backupbuddy' ), ( $this->get_added_dir_count() + $this->get_added_file_count() ) ) );
+			$this->get_logger()->log( $level, $message );
 			
-			}
-		
-		}
-		
-		protected function monitor_usage() {
-		
-			$usage_data = array();
-			$current_monitor_period = 0;
-			
-			// Would expect to monitor except on Windows which doesn't support getrusage()
-			if ( true === $this->is_monitoring_usage() ) {
-			
-				// Decide if we need to log usage data
-				$current_monitor_period = ( time() - $this->get_monitor_start_time() );
-				if ( $this->get_monitor_threshold_period() < $current_monitor_period ) {
-			
-					if ( false === $this->_reported ) {
-				
-						// Log where we are at and connection status for information
-						pb_backupbuddy::status( 'details', sprintf( __('Zip process reported: Accumulated bursts requested %1$s (directories + files) items to be added to backup zip archive','it-l10n-backupbuddy' ), ( $this->get_added_dir_count() + $this->get_added_file_count() ) ) );
-						pb_backupbuddy::status( 'details', sprintf( __('Zip process reported: Connection status: %1$s (%2$s)','it-l10n-backupbuddy' ), $this->connection_status_tostring( connection_status() ), connection_status() ) );
-						$this->_reported = true;
-					
-					}
-				
-					// Get some usage data from the server (check that function available) and log it
-					$usage_data = getrusage();
-				
-					// Determine the total user space time since we initialized the monitoring (relative)
-					$this->_elapsed_user_time = ( $usage_data[ 'ru_utime.tv_sec' ] - $this->_start_user_time );
-					pb_backupbuddy::status( 'details', sprintf( __('Zip process reported: Usage data (raw/relative): ( %1$s, %2$s, %3$s, %4$s, %5$s )/( -, %6$s, -, -, - )','it-l10n-backupbuddy' ), $usage_data[ 'ru_stime.tv_sec' ], $usage_data[ 'ru_utime.tv_sec' ], $usage_data[ 'ru_majflt' ], $usage_data[ 'ru_nvcsw' ], $usage_data[ 'ru_nivcsw' ], $this->_elapsed_user_time ) );
-
-					// Reset the monitoring period start time
-					$this->set_monitor_start_time( time() );
-
-				}
-			
-			}
-			
-		}
-
-		protected function handle_burst_mode() {
-						
-			$current_execution_period = 0;
-			
-			// Only bother with burst handling if multi-burst mode selected
-			if ( true === $this->is_multi_burst() ) {
-			
-				// Decide if we have been running long enough to need to reset time limit
-				$current_execution_period = ( time() - $this->get_execution_start_time() );
-				if ( $this->get_execution_threshold_period() < $current_execution_period ) {
-			
-					if ( false === $this->_reported ) {
-					
-						// Log where we are at and connection status for information
-						pb_backupbuddy::status( 'details', sprintf( __('Zip process reported: Accumulated bursts requested %1$s (directories + files) items to be added to backup zip archive','it-l10n-backupbuddy' ), ( $this->get_added_dir_count() + $this->get_added_file_count() ) ) );
-						pb_backupbuddy::status( 'details', sprintf( __('Zip process reported: Connection status: %1$s (%2$s)','it-l10n-backupbuddy' ), $this->connection_status_tostring( connection_status() ), connection_status() ) );
-						$this->_reported = true;
-						
-					}
-				
-					// Log how long the burst ran for and then reset the burst start time and max period
-					pb_backupbuddy::status( 'details', sprintf( __('Zip process reported: %1$s seconds elapsed - resetting timebase to %2$s seconds','it-l10n-backupbuddy' ), $current_execution_period, $this->get_execution_max_period() ) );
-
-					// Reset the execution period start time
-					$this->set_execution_start_time( time() );
-				
-					// Reset the execution time timer (if the server honours this)
-					@set_time_limit( $this->get_execution_max_period() );
-					// Maybe use ini_set() if set_time_limit() were to be disabled (test that on object creation)
-					//@ini_set( 'max_execution_time', 30 );
-				
-				}
-			
-			}
+			return $this;
 			
 		}
 		
-		protected function tickle_server() {
-		
-			$current_tickle_period = 0;
-		
-			// Only bother with server tickling if it is selected
-			if ( true === $this->is_server_tickling() ) {
+		public function set_logger( $logger ) {
 			
-				// Decide if we have been running long enough to need to tickle the server
-				$current_tickle_period = ( time() - $this->get_tickle_start_time() );
-				if ( $this->get_tickle_threshold_period() < $current_tickle_period ) {
+			$this->_logger = $logger;
 			
-					if ( false === $this->_reported ) {
-					
-						// Log where we are at and connection status for information
-						pb_backupbuddy::status( 'details', sprintf( __('Zip process reported: Accumulated bursts requested %1$s (directories+ files) items to be added to backup zip archive','it-l10n-backupbuddy' ), ( $this->get_added_dir_count() + $this->get_added_file_count() ) ) );
-						pb_backupbuddy::status( 'details', sprintf( __('Zip process reported: Connection status: %1$s (%2$s)','it-l10n-backupbuddy' ), $this->connection_status_tostring( connection_status() ), connection_status() ) );
-						$this->_reported = true;
-						
-					}
-				
-					// Log how long since we last tickled and indicate tickling
-					pb_backupbuddy::status( 'details', sprintf( __('Zip process reported: %1$s seconds elapsed - tickling server','it-l10n-backupbuddy' ), $current_tickle_period ) );
-					$this->set_tickle_start_time( time() );
-				
-					// Output the tickler to give something to flush
-					echo $this->get_server_tickler();
-				
-					// Force flushing and end of buffering
-					// Possibly should need to do this because nothing should have started buffering
-					// should it? It's possible that PHP config could have enabled one level of buffering
-					// so at least handle that with the method as exemplified in the PHP manual. Also do
-					// a staright flush as that should cause a flush at least to the server which is
-					// actually all we want in this particular case.
-					while ( @ob_end_flush() );
-					flush();
-
-				}
+			return $this;
 			
-			}
-		
 		}
-
+		
+		public function get_logger() {
+			
+			if ( is_null( $this->_logger ) ) {
+				
+				$logger = new pluginbuddy_zipbuddy_null_object();
+				$this->set_logger( $pm );
+				
+			}
+			
+			return $this->_logger;
+			
+		}
+		
 	}
 
 	abstract class pluginbuddy_zbzipcore {
@@ -889,6 +842,8 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		// OS Specific null device name for shell redirection as required
 		const OS_TYPE_NIX_NULL_DEVICE = '/dev/null';
 		const OS_TYPE_WIN_NULL_DEVICE = 'nul';
+		
+		const ZIP_BURST_GAP_MIN = 0;
 
 		public $_version = '1.0';
 
@@ -980,7 +935,56 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
          */
 		protected $_compression = false;
 		
-       /**
+         /**
+         * Convenience integer indicating the maximum period for any action during a step
+         * 
+         * @var step_period	int
+         */
+		protected $_step_period = null;
+		
+         /**
+         * Convenience integer indicating the gap to delay between burst
+         * 
+         * @var burst_gap	int
+         */
+		protected $_burst_gap = null;
+		
+          /**
+         * Convenience double indicating the minimum burst content size
+         * 
+         * @var min_burst_content	double
+         */
+		protected $_min_burst_content = null;
+		
+          /**
+         * Convenience double indicating the maximum burst content size
+         * 
+         * @var max_burst_content	double
+         */
+		protected $_max_burst_content = null;
+		
+          /**
+         * Convenience integer indicating the burst threshold period
+         * 
+         * @var burst_threshold_period	int
+         */
+		protected $_burst_threshold_period = null;
+		
+         /**
+         * The logger we will use
+         * 
+         * @var logger	object
+         */
+		protected $_logger = null;
+	
+          /**
+         * The process monitor we will use
+         * 
+         * @var logger	object
+         */
+		protected $_process_monitor = null;
+	
+      /**
          * Used to translate our warnings reasons into a longer description
          * 
          * @var array
@@ -1016,7 +1020,21 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		 *	@return		null
 		 *
 		 */
-		public function __construct() {
+		public function __construct( &$parent = null ) {
+			
+			// Inherit the parent logger by default (if it has one), caller may override after instantiated
+			if ( $parent && method_exists( $parent, 'get_logger' ) ) {
+			
+				$this->set_logger( $parent->get_logger() );
+				
+			}
+		
+			// Inherit the parent process monitor by default (if it has one), caller may override after instantiated
+			if ( $parent && method_exists( $parent, 'get_process_monitor' ) ) {
+			
+				$this->set_process_monitor( $parent->get_process_monitor() );
+				
+			}
 		
 			// Make sure we know what we are running on for later
 			$this->set_os_type();
@@ -1029,6 +1047,18 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 			
 			// Derive whether compression should be used (expected to be overridden by user)
 			$this->set_compression();
+			
+			// Derive step period after which a new step must be initiated
+			$this->set_step_period();
+			
+			// Gap between bursts if a server needs time to catch up or reduce load
+			$this->set_burst_gap();
+			
+			// Least amount of data we want to try and add during a burst
+			$this->set_min_burst_content();
+			
+			// Most amount of data we want to try and add during a burst
+			$this->set_max_burst_content();
 			
 			// Specific method constructor will override some of these and the tests may override others
 			$this->_method_details[ 'attr' ] = array( 'name' => 'Unknown Method',
@@ -1229,7 +1259,7 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		 *	being built.
 		 *
 		 *	@param		bool	$ignore	False to not ignore warnings, True to force ignore
-		 *	@return		bool			True if conditions indicate warnings should be ignored, false otherwise
+		 *	@return		object					This object
 		 *
 		 */
 		 public function set_ignore_warnings( $ignore = null ) {
@@ -1261,7 +1291,7 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		 *	being built.
 		 *
 		 *	@param		bool	$ignore	False to not ignore symlinks, True to force ignore
-		 *	@return		bool			True if conditions indicate symlinks should be ignored/not-followed, false otherwise
+		 *	@return		object					This object
 		 *
 		 */
 		 public function set_ignore_symlinks( $ignore = null ) {
@@ -1293,7 +1323,7 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		 *	Checks conditions to see if compression should be used when building archive.
 		 *
 		 *	@param		bool	$compression	False to prohibit compression, True to force compression
-		 *	@return		bool					True if conditions indicate compression should be used, false otherwise
+		 *	@return		object					This object
 		 *
 		 */
 		 public function set_compression( $compression = null ) {
@@ -1315,6 +1345,154 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		protected function get_compression() {
 		
 			return $this->_compression;
+		
+		}
+		
+		/**
+		 *	set_step_period()
+		 *
+		 *	Sets the step period to use after which we start new step
+		 *
+		 *	@param		mixed	$step_period	Should be integer period but could be null
+		 *	@return		object					This object
+		 *
+		 */
+		 public function set_step_period( $step_period = null ) {
+		 
+		 	$this->_step_period =  ( is_int( $step_period ) ) ? $step_period : PHP_INT_MAX ;
+
+			return $this;
+
+		 }
+
+		/**
+		 *	get_step_period()
+		 *	
+		 *	This returns the step period to use.
+		 *	
+		 *	@return		int				Value of $_step_period
+		 *
+		 */
+		protected function get_step_period() {
+		
+			return $this->_step_period;
+		
+		}
+		
+		/**
+		 *	exceeded_step_period()
+		 *	
+		 *	This returns true if provided period is > step period
+		 *	
+		 *	@return		bool			True if exceeded, otherwise false
+		 *
+		 */
+		protected function exceeded_step_period( $elapsed = 0 ) {
+		
+			return ( $elapsed < $this->get_step_period() ) ? false : true ;
+		
+		}		
+		
+		/**
+		 *	set_burst_gap()
+		 *
+		 *	Sets the interburst gap period that we wait for server to catch up or reduce load
+		 *
+		 *	@param		mixed	$burst_gap	Should be integer period but could be null
+		 *	@return		object				This object
+		 *
+		 */
+		 public function set_burst_gap( $burst_gap = null ) {
+		 
+		 	$this->_burst_gap =  ( is_int( $burst_gap ) ) ? $burst_gap : self::ZIP_BURST_GAP_MIN ;
+
+			return $this;
+
+		 }
+
+		/**
+		 *	get_burst_gap()
+		 *	
+		 *	This returns the burst gap to use.
+		 *	
+		 *	@return		int				Value of $_burst_gap
+		 *
+		 */
+		protected function get_burst_gap() {
+		
+			return $this->_burst_gap;
+		
+		}
+		
+		/**
+		 *	set_min_burst_content()
+		 *
+		 *	Sets the min burst content size we want to add during a burst
+		 *
+		 *	@param		mixed	$min_burst_content	Should be double but could be null
+		 *	@return		object						This object
+		 *
+		 */
+		 public function set_min_burst_content( $min_burst_content = null ) {
+		 
+			// example of a "large" value on either a 32 or 64 bit system
+		 	$default = ( 4 == PHP_INT_SIZE ) ? (double)( pow(2, 63) - 1 ) : (double)PHP_INT_MAX ;
+		 	// Need to convert $min_burst_content to a double only if it is numeric
+		 	$min_burst_content = ( is_numeric( $min_burst_content ) ) ? (double)$min_burst_content : $min_burst_content ;
+		 	
+		 	$this->_min_burst_content =  ( is_double( $min_burst_content ) ) ? $min_burst_content : $default ;
+
+			return $this;
+
+		 }
+
+		/**
+		 *	get_min_burst_content()
+		 *	
+		 *	This returns the minimum burst content to use.
+		 *	
+		 *	@return		double				Value of $_min_burst_content
+		 *
+		 */
+		protected function get_min_burst_content() {
+		
+			return $this->_min_burst_content;
+		
+		}
+		
+		/**
+		 *	set_max_burst_content()
+		 *
+		 *	Sets the max burst content size we want to add during a burst
+		 *
+		 *	@param		mixed	$max_burst_content	Should be double but could be null
+		 *	@return		object						This object
+		 *
+		 */
+		 public function set_max_burst_content( $max_burst_content = null ) {
+		 
+			// example of a "large" value on either a 32 or 64 bit system
+		 	$default = ( 4 == PHP_INT_SIZE ) ? (double)( pow(2, 63) - 1 ) : (double)PHP_INT_MAX ;
+		 	// Need to convert $max_burst_content to a double only if it is numeric
+		 	$max_burst_content = ( is_numeric( $max_burst_content ) ) ? (double)$max_burst_content : $max_burst_content ;
+		 	
+		 	$this->_max_burst_content =  ( is_double( $max_burst_content ) ) ? $max_burst_content : $default ;
+
+			return $this;
+
+		 }
+
+		/**
+		 *	get_max_burst_content()
+		 *	
+		 *	This returns the maximum burst content to use.
+		 *	
+		 *	@return		double				Value of $_max_burst_content
+		 *
+		 */
+		protected function get_max_burst_content() {
+		
+			return $this->_max_burst_content;
 		
 		}
 		
@@ -1373,19 +1551,20 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		protected function log_archive_file_stats( $file, $options = array() ) {
 		
 			// Get the file stats so we can log some information
+			// Using our stat() function in case file size exceeds 2GB on a 32 bit PHP system
 			$file_stats = pluginbuddy_stat::stat( $file );
 			
 			// Only log anything if we got some valid file stats
 			if ( false !== $file_stats ) {
 			
-				pb_backupbuddy::status( 'details', sprintf( __( 'Zip Archive file size: %1$s bytes, owned by user:group %2$s:%3$s with permissions %4$s', 'it-l10n-backupbuddy' ), $file_stats[ 'dsize' ], $file_stats[ 'uid' ], $file_stats[ 'gid' ], $file_stats[ 'mode_octal_four' ] ) );
+				$this->log( 'details', sprintf( __( 'Zip Archive file size: %1$s bytes, owned by user:group %2$s:%3$s with permissions %4$s', 'it-l10n-backupbuddy' ), number_format( $file_stats[ 'dsize' ], 0, ".", "" ), $file_stats[ 'uid' ], $file_stats[ 'gid' ], $file_stats[ 'mode_octal_four' ] ) );
 
 				if ( isset( $options[ 'content_size' ] ) ) {
 			
 					// We have been given the size of the content that was added so let's
 					// determine an approximate compression ratio
 					$compression_ratio = $file_stats[ 'dsize' ] / (double)$options[ 'content_size' ];
-					pb_backupbuddy::status( 'details', sprintf( __( 'Zip Archive file size: content compressed to %1$d%% of original size (approximately)', 'it-l10n-backupbuddy' ), ( $compression_ratio * 100.00 ) ) );
+					$this->log( 'details', sprintf( __( 'Zip Archive file size: content compressed to %1$d%% of original size (approximately)', 'it-l10n-backupbuddy' ), ( $compression_ratio * 100.00 ) ) );
 
 				}
 			
@@ -1573,7 +1752,7 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 			// Array for cleaned up exclusions list
 			$sanitized_exclusions = array();
 			
-			pb_backupbuddy::status( 'details', 'Creating backup exclusions file `' . $file . '`.' );
+			$this->log( 'details', 'Creating backup exclusions file `' . $file . '`.' );
 			//$exclusions = backupbuddy_core::get_directory_exclusions();
 			
 			// Test each exclusion for validity (presence) and drop those not actually present
@@ -1585,7 +1764,7 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 				// DIRECTORY.
 				if ( is_dir( ABSPATH . ltrim( $exclusion, DIRECTORY_SEPARATOR ) ) ) {
 					
-					pb_backupbuddy::status( 'details', 'Excluding directory `' . $exclusion . '`.' );
+					$this->log( 'details', 'Excluding directory `' . $exclusion . '`.' );
 					
 					// Need to add the wildcard so that zip will exclude the directory and content
 					$exclusion = rtrim( $exclusion, DIRECTORY_SEPARATOR ) . DIRECTORY_SEPARATOR . '*';
@@ -1593,17 +1772,17 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 				// FILE.
 				} elseif ( is_file( ABSPATH . ltrim( $exclusion, DIRECTORY_SEPARATOR ) ) ) {
 					
-					pb_backupbuddy::status( 'details', 'Excluding file `' . $exclusion . '`.' );
+					$this->log( 'details', 'Excluding file `' . $exclusion . '`.' );
 				
 				// SYMBOLIC LINK.
 				} elseif ( is_link( ABSPATH . ltrim( $exclusion, DIRECTORY_SEPARATOR ) ) ) {
 					
-					pb_backupbuddy::status( 'details', 'Excluding symbolic link `' . $exclusion . '`.' );
+					$this->log( 'details', 'Excluding symbolic link `' . $exclusion . '`.' );
 				
 				// DOES NOT EXIST.
 				} else {
 					
-					pb_backupbuddy::status( 'details', 'Omitting exclusion as file/directory does not currently exist: `' . $exclusion . '`.' );
+					$this->log( 'details', 'Omitting exclusion as file/directory does not currently exist: `' . $exclusion . '`.' );
 					
 					// Skip to next exclusion
 					continue;
@@ -1617,7 +1796,7 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 			
 			// Put the exclusions to a file as a string
 			file_put_contents( $file, implode( PHP_EOL, $sanitized_exclusions ) . PHP_EOL );
-			pb_backupbuddy::status( 'details', 'Backup exclusions file created.' );
+			$this->log( 'details', 'Backup exclusions file created.' );
 			
 		} // End render_exclusions_file().
 		
@@ -1736,7 +1915,7 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 
 			foreach ( $show_lines as $line ) {
 
-				pb_backupbuddy::status( 'details', __( 'Zip process reported: ','it-l10n-backupbuddy' ) . $line );
+				$this->log( 'details', __( 'Zip process reported: ','it-l10n-backupbuddy' ) . $line );
 
 			}
 		
@@ -1748,11 +1927,61 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		
 				if ( @file_exists( $reports_file ) ) {
 		
-					pb_backupbuddy::status( 'details', sprintf( __( 'Zip process reported %1$s more %2$s report%3$s - please review in: %4$s','it-l10n-backupbuddy' ), ( $reports_count - $report_lines_to_show ), $report_prefix, ( ( 1 == $reports_count ) ? '' : 's' ), $reports_file ) );
+					$this->log( 'details', sprintf( __( 'Zip process reported %1$s more %2$s report%3$s - please review in: %4$s','it-l10n-backupbuddy' ), ( $reports_count - $report_lines_to_show ), $report_prefix, ( ( 1 == $reports_count ) ? '' : 's' ), $reports_file ) );
 			
 				}
 		
 			}
+			
+		}
+		
+		public function log( $level, $message ) {
+			
+			$this->get_logger()->log( $level, $message );
+			
+			return $this;
+			
+		}
+		
+		public function set_logger( $logger ) {
+			
+			$this->_logger = $logger;
+			
+			return $this;
+			
+		}
+		
+		public function get_logger() {
+			
+			if ( is_null( $this->_logger ) ) {
+				
+				$logger = new pluginbuddy_zipbuddy_null_object();
+				$this->set_logger( $logger );
+				
+			}
+			
+			return $this->_logger;
+			
+		}
+		
+		public function set_process_monitor( $process_monitor ) {
+			
+			$this->_process_monitor = $process_monitor;
+			
+			return $this;
+			
+		}
+		
+		public function get_process_monitor() {
+			
+			if ( is_null( $this->_process_monitor) ) {
+				
+				$pm = new pluginbuddy_zipbuddy_null_object();
+				$this->set_logger( $pm );
+				
+			}
+			
+			return $this->_process_monitor;
 			
 		}
 		
@@ -1781,11 +2010,24 @@ if ( !class_exists( "pluginbuddy_zbzipcore" ) ) {
 		 *	@param		string	$dir			Full path of directory to add to ZIP Archive file
 		 *	@parame		array	$excludes		List of either absolute path exclusions or relative exclusions
 		 *	@param		string	$tempdir		Full path of directory for temporary usage
-		 *	@param		object	$listmaker		The object from which we can get an inclusions list
-		 *	@return		bool					True if the creation was successful, false otherwise
+		 *	@return		bool					True if the creation was successful, array for continuation, false otherwise
 		 *
 		 */
-		abstract public function create( $zip, $dir, $excludes, $tempdir, $listmaker = NULL );
+		abstract public function create( $zip, $dir, $excludes, $tempdir );
+		
+		/**
+		 *	grow()
+		 *	
+		 *	A function that grows and existing archive based on an already calculated content list
+		 *	
+		 *	
+		 *	@param		string	$zip			Full path & filename of ZIP Archive file to grow
+		 *	@param		string	$tempdir		Full path of directory for temporary usage
+		 *	@param		array	$state			The state information allowing us to pick up
+		 *	@return		bool					True if the creation was successful, array for continuation, false otherwise
+		 *
+		 */
+		abstract public function grow( $zip, $tempdir, $state );
 		
 		/**
 		 *	extract()

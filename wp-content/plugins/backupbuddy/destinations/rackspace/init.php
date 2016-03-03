@@ -5,8 +5,9 @@
 class pb_backupbuddy_destination_rackspace { // Change class name end to match destination name.
 	
 	public static $destination_info = array(
-		'name'			=>		'Rackspace',
-		'description'	=>		'Rackspace Cloud Files is an online cloud storage service (like Amazon S3) for storing files. <a href="http://www.rackspace.com/cloud/public/files/" target="_new">Learn more here.</a>',
+		'name'			=>		'Rackspace Cloud Files',
+		'description'	=>		'Rackspace Cloud Files is an online cloud storage service (like Amazon S3) for storing files. <a href="http://www.rackspace.com/cloud/public/files/" target="_blank">Learn more here.</a>',
+		'category'		=>		'normal', // best, normal, legacy
 	);
 	
 	// Default settings. Should be public static for auto-merging.
@@ -18,8 +19,33 @@ class pb_backupbuddy_destination_rackspace { // Change class name end to match d
 		'container'		=>		'',		// Rackspace container to send into.
 		'server'		=>		'https://auth.api.rackspacecloud.com', // Server address to connect to for sending. For instance the UK Rackspace cloud URL differs.
 		'archive_limit'	=>		'0',
+		'service_net'	=>		'0',	// Whether to use internal service net to reduce bandwidth when internal to the Rackspace network.
 		'disable_file_management'	=>		'0',		// When 1, _manage.php will not load which renders remote file management DISABLED.
+		'disabled'					=>		'0',		// When 1, disable this destination.
 	);
+	
+	
+	
+	public static function connect( $settings = array() ) {
+		require_once( dirname( __FILE__ ) . '/lib/rackspace/cloudfiles.php' );
+		$auth = new CF_Authentication( $settings['username'], $settings['api_key'], NULL, $settings['server'] );
+		try {
+			$auth->authenticate();
+		} Catch( Exception $e ) {
+			global $pb_backupbuddy_destination_errors;
+			$message = 'Error #238338: Unable to authenticate to Rackspace Cloud Files. Details: `' . $e->getMessage() . '`.';
+			pb_backupbuddy::status( 'error', $message );
+			$pb_backupbuddy_destination_errors[] = $message;
+			return false;
+		}
+		//error_log( print_r( $auth, true ) );
+		if ( isset( $settings['service_net'] ) && ( '1' == $settings['service_net'] ) ) {
+			$sn_url = 'https://snet-' . substr( $auth->storage_url, strlen( 'https://' ) );
+			$auth->storage_url = $sn_url;
+		}
+		$conn = new CF_Connection( $auth );
+		return $conn;
+	} // End connect().
 	
 	
 	
@@ -31,22 +57,25 @@ class pb_backupbuddy_destination_rackspace { // Change class name end to match d
 	 *	@return		boolean						True on success, else false.
 	 */
 	public static function send( $settings = array(), $files = array(), $send_id = '' ) {
+		global $pb_backupbuddy_destination_errors;
+		if ( '1' == $settings['disabled'] ) {
+			$pb_backupbuddy_destination_errors[] = __( 'Error #48933: This destination is currently disabled. Enable it under this destination\'s Advanced Settings.', 'it-l10n-backupbuddy' );
+			return false;
+		}
+		if ( ! is_array( $files ) ) {
+			$files = array( $files );
+		}
 		
-		$rs_username = $settings['username'];
-		$rs_api_key = $settings['api_key'];
 		$rs_container = $settings['container'];
 		$limit = $settings['archive_limit'];
-		$rs_server = $settings['server'];
-			
-			
-		require_once( dirname( __FILE__ ) . '/lib/rackspace/cloudfiles.php' );
-		$auth = new CF_Authentication( $rs_username, $rs_api_key, NULL, $rs_server );
-		$auth->authenticate();
-		$conn = new CF_Connection( $auth );
-
+		
+		if ( false === ( $conn = self::connect( $settings ) ) ) {
+			return false;
+		}
+		
 		// Set container
 		@$conn->create_container( $rs_container ); // Create container if it does not exist.
-		$container = $conn->get_container($rs_container); // Get container.
+		$container = $conn->get_container( $rs_container ); // Get container.
 		
 		foreach( $files as $rs_file ) {
 			pb_backupbuddy::status( 'details',  'About to create object on Rackspace...' );
@@ -128,34 +157,31 @@ class pb_backupbuddy_destination_rackspace { // Change class name end to match d
 		if ( empty( $rs_username ) || empty( $rs_api_key ) || empty( $rs_container ) ) {
 			return __('Missing one or more required fields.', 'it-l10n-backupbuddy' );
 		}
-		require_once( dirname( __FILE__ ) . '/lib/rackspace/cloudfiles.php');
-		$auth = new CF_Authentication( $rs_username, $rs_api_key, NULL, $rs_server );
-		if ( !$auth->authenticate() ) {
-			return __('Unable to authenticate. Verify your username/api key.', 'it-l10n-backupbuddy' );
+		
+		if ( false === ( $conn = self::connect( $settings ) ) ) {
+			return false;
 		}
-
-		$conn = new CF_Connection( $auth );
-
+		
 		// Set container
 		@$conn->create_container( $rs_container ); // Create container if it does not exist.
 		
 		$container = @$conn->get_container( $rs_container ); // returns object on success, string error message on failure.
-		if ( !is_object( $container ) ) {
+		if ( ! is_object( $container ) ) {
 			return __( 'There was a problem selecting the container:', 'it-l10n-backupbuddy' ) . ' ' . $container;
 		}
 		// Create test file
 		$testbackup = @$container->create_object( 'backupbuddytest.txt' );
-		if ( !$testbackup->load_from_filename( pb_backupbuddy::plugin_path() . '/readme.txt') ) {
+		if ( ! $testbackup->load_from_filename( pb_backupbuddy::plugin_path() . '/readme.txt') ) {
 			return __('BackupBuddy was not able to write the test file.', 'it-l10n-backupbuddy' );
 		}
 		
 		// Delete test file from Rackspace
-		if ( !$container->delete_object( 'backupbuddytest.txt' ) ) {
+		if ( ! $container->delete_object( 'backupbuddytest.txt' ) ) {
 			return __('Unable to delete file from container.', 'it-l10n-backupbuddy' );
 		}
 		
 		return true; // Success
-
+		
 		
 	} // End test().
 	

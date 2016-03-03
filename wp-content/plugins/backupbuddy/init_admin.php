@@ -39,46 +39,19 @@ if ( ! class_exists( 'backupbuddy_core' ) ) {
 
 
 /* BEGIN HANDLING DATA STRUCTURE UPGRADE */
-
-
-
-// 2.x -> 3.x
-$options = get_site_option( 'pluginbuddy_backupbuddy' ); // Attempt to get 2.x options.
-if ( is_multisite() ) { // Try to read site-specific settings in.
-	$multisite_option = get_option( 'pluginbuddy_backupbuddy' );
-	if ( $multisite_option ) {
-		$options = $multisite_option;
-	}
-	unset( $multisite_option );
-}
-
-// If options is not false then we need to upgrade.
-if ( $options !== false ) {
-	pb_backupbuddy::status( 'details', 'Migrating data structure. 2.x data discovered.' );
-	backupbuddy_core::verify_directories( $skipTempGeneration = true );
-	require_once( pb_backupbuddy::plugin_path() . '/controllers/activation.php' );
-}
-unset( $options );
-
-// Check if data version is behind & run activation upgrades if needed.
 $default_options = pb_backupbuddy::settings( 'default_options' );
 if ( pb_backupbuddy::$options['data_version'] < $default_options['data_version'] ) {
 	backupbuddy_core::verify_directories( $skipTempGeneration = true );
 	pb_backupbuddy::status( 'details', 'Data structure version of `' . pb_backupbuddy::$options['data_version'] . '` behind current version of `' . $default_options['data_version'] . '`. Running activation upgrade.' );
 	require_once( pb_backupbuddy::plugin_path() . '/controllers/activation.php' );
 }
-
-
-
 /* END HANDLING DATA STRUCTURE UPGRADE */
 
 
 
 // Schedule daily housekeeping.
-if ( false === wp_next_scheduled( pb_backupbuddy::cron_tag( 'housekeeping' ) ) ) { // if schedule does not exist...
-	backupbuddy_core::schedule_event( time() + ( 60*60 * 2 ), 'daily', pb_backupbuddy::cron_tag( 'housekeeping' ), array() ); // Add schedule.
-}
-
+backupbuddy_core::verifyHousekeeping();
+backupbuddy_core::verifyLiveCron();
 
 
 /********** ACTIONS (admin) **********/
@@ -116,7 +89,7 @@ add_action( 'wp_ajax_nopriv_backupbuddy_api', array( pb_backupbuddy::$_ajax, 'ap
 
 
 // Display stats in Dashboard.
-if ( ( !is_multisite() ) || ( is_multisite() && is_network_admin() ) ) { // Only show if standalon OR in main network admin.
+if ( ( !is_multisite() ) || ( is_multisite() && is_network_admin() ) ) { // Only show if standalone OR in main network admin.
 	pb_backupbuddy::add_dashboard_widget( 'stats', 'BackupBuddy v' . pb_backupbuddy::settings( 'version' ), 'godmode' );
 }
 
@@ -141,8 +114,11 @@ if ( is_multisite() && backupbuddy_core::is_network_activated() && !defined( 'PB
 		
 		if ( is_network_admin() ) { // Network Admin pages
 			pb_backupbuddy::add_page( '', 'backup', array( pb_backupbuddy::settings( 'name' ), __( 'Backup', 'it-l10n-backupbuddy' ) ), 'manage_network', $icon );
+			if ( '1' !== pb_backupbuddy::$options['hide_live'] ) {
+				pb_backupbuddy::add_page( 'backup', 'live', __( 'Stash Live', 'it-l10n-backupbuddy' ), 'manage_network' );
+			}
 			pb_backupbuddy::add_page( 'backup', 'migrate_restore', __( 'Migrate, Restore', 'it-l10n-backupbuddy' ), 'manage_network' );
-			pb_backupbuddy::add_page( 'backup', 'destinations', __( 'Remote Destinations', 'it-l10n-backupbuddy' ), pb_backupbuddy::$options['role_access'] );
+			pb_backupbuddy::add_page( 'backup', 'destinations', __( 'Remote Destinations', 'it-l10n-backupbuddy' ), 'manage_network' );
 			pb_backupbuddy::add_page( 'backup', 'multisite_import', __( 'MS Import (beta)', 'it-l10n-backupbuddy' ), 'manage_network' );
 			pb_backupbuddy::add_page( 'backup', 'server_tools', __( 'Server Tools', 'it-l10n-backupbuddy' ), 'manage_network' );
 			pb_backupbuddy::add_page( 'backup', 'malware_scan', __( 'Malware Scan', 'it-l10n-backupbuddy' ), 'manage_network' );
@@ -164,7 +140,7 @@ if ( is_multisite() && backupbuddy_core::is_network_activated() && !defined( 'PB
 			}
 			
 			//pb_backupbuddy::add_page( '', 'getting_started', array( pb_backupbuddy::settings( 'name' ), 'Getting Started' . $export_note ), $capability );
-			pb_backupbuddy::add_page( '', 'multisite_export', $export_title, $capability, $icon );
+			pb_backupbuddy::add_page( '', 'multisite_export', array( pb_backupbuddy::settings( 'name' ), $export_title ), $capability, $icon );
 			pb_backupbuddy::add_page( 'multisite_export', 'malware_scan', __( 'Malware Scan', 'it-l10n-backupbuddy' ), $capability );
 		}
 		
@@ -175,9 +151,11 @@ if ( is_multisite() && backupbuddy_core::is_network_activated() && !defined( 'PB
 } else { // Standalone site.
 	
 	pb_backupbuddy::add_page( '', 'backup', array( pb_backupbuddy::settings( 'name' ), __( 'Backup', 'it-l10n-backupbuddy' ) ), pb_backupbuddy::$options['role_access'], $icon );
+	if ( '1' !== pb_backupbuddy::$options['hide_live'] ) {
+		pb_backupbuddy::add_page( 'backup', 'live', __( 'Stash Live', 'it-l10n-backupbuddy' ), pb_backupbuddy::$options['role_access'] );
+	}
 	pb_backupbuddy::add_page( 'backup', 'migrate_restore', __( 'Restore / Migrate', 'it-l10n-backupbuddy' ), pb_backupbuddy::$options['role_access'] );
 	pb_backupbuddy::add_page( 'backup', 'destinations', __( 'Remote Destinations', 'it-l10n-backupbuddy' ), pb_backupbuddy::$options['role_access'] );
-	//pb_backupbuddy::add_page( 'backup', 'deploy', __( 'Deployments', 'it-l10n-backupbuddy' ), pb_backupbuddy::$options['role_access'] );
 	pb_backupbuddy::add_page( 'backup', 'server_tools', __( 'Server Tools', 'it-l10n-backupbuddy' ), pb_backupbuddy::$options['role_access'] );
 	pb_backupbuddy::add_page( 'backup', 'malware_scan', __( 'Malware Scan', 'it-l10n-backupbuddy' ), pb_backupbuddy::$options['role_access'] );
 	pb_backupbuddy::add_page( 'backup', 'scheduling', __( 'Schedules', 'it-l10n-backupbuddy' ), pb_backupbuddy::$options['role_access'] );
@@ -189,6 +167,9 @@ if ( is_multisite() && backupbuddy_core::is_network_activated() && !defined( 'PB
 /********** OTHER (admin) **********/
 add_filter( 'contextual_help', 'pb_backupbuddy_contextual_help', 10, 3 );
 function pb_backupbuddy_contextual_help( $contextual_help, $screen_id, $screen ) { // Loads help from file in controllers/help/:PAGENAME:.php
+	if ( ! current_user_can( pb_backupbuddy::$options['role_access'] ) ) {
+		return;
+	}
 	
 	// WordPress pre-v3.3 so no contextual help.
 	if ( ! method_exists( $screen, 'add_help_tab' ) ) {
@@ -213,16 +194,110 @@ function pb_backupbuddy_contextual_help( $contextual_help, $screen_id, $screen )
 	'id'      => 'pb_backupbuddy_additionalhelp',
 	'title'   => __( 'Tutorials & Support', 'it-l10n-backupbuddy' ),
 	'content' => '<p>
-					<a href="http://ithemes.com/publishing/getting-started-with-backupbuddy/" target="_new">' . __( 'Getting Started eBook', 'it-l10n-backupbuddy' ) . '</a>
+					<a href="http://ithemes.com/publishing/getting-started-with-backupbuddy/" target="_blank">' . __( 'Getting Started eBook', 'it-l10n-backupbuddy' ) . '</a>
 					<br>
-					<a href="http://ithemes.tv/category/backupbuddy/" target="_new">' . __( 'Getting Started Videos', 'it-l10n-backupbuddy' ) . '</a>
+					<a href="http://ithemes.tv/category/backupbuddy/" target="_blank">' . __( 'Getting Started Videos', 'it-l10n-backupbuddy' ) . '</a>
 					<br>
-					<a href="http://ithemes.com/codex/" target="_new">' . __( 'Knowledge Base & Tutorials', 'it-l10n-backupbuddy' ) . '</a>
+					<a href="http://ithemes.com/codex/" target="_blank">' . __( 'Knowledge Base & Tutorials', 'it-l10n-backupbuddy' ) . '</a>
 					<br>
-					<a href="http://ithemes.com/support/" target="_new"><b>' . __( 'Support Forum', 'it-l10n-backupbuddy' ) . '</b></a>
+					<a href="http://ithemes.com/support/" target="_blank"><b>' . __( 'Support', 'it-l10n-backupbuddy' ) . '</b></a>
 				</p>',
 	));
 	
 	return $contextual_help;
 	
 } // End pb_backupbuddy_contextual_help().
+
+
+
+/***** BEGIN STASH LIVE ADMIN BAR *****/
+function backupbuddy_live_admin_bar_menu( $wp_admin_bar ) {
+	if ( ! current_user_can( pb_backupbuddy::$options['role_access'] ) ) {
+		return;
+	}
+	
+    $args = array(
+        'id'    => 'backupbuddy_stash_live_admin_bar',
+        'title' => 'BackupBuddy Stash Live',
+    );
+    $wp_admin_bar->add_node( $args );
+
+    $child_args = array();
+
+    array_push( $child_args, array(
+        'id'     => 'backupbuddy_stash_live_admin_bar_stats',
+        'title'  => '<div class="backupbuddy-stash-live-admin-bar-stats-container"><span class="backupbuddy-pulsing-orb"></span><span class="backupbuddy-stash-live-admin-bar-stats-text">' . __( 'Loading...', 'it-l10n-backupbuddy' ) . '</span></div>',
+        'href'   =>  admin_url( 'admin.php?page=pb_backupbuddy_live' ),
+        'parent' => 'backupbuddy_stash_live_admin_bar',
+    ));
+
+    foreach ( $child_args as $args ) {
+        $wp_admin_bar->add_node($args);
+    }
+
+}
+function backupbuddy_live_admin_bar_script() {
+	if ( ! current_user_can( pb_backupbuddy::$options['role_access'] ) ) {
+		return;
+	}
+	
+	wp_register_script( 'backupbuddy_live_admin_bar', pb_backupbuddy::plugin_url() . '/destinations/live/admin_bar.js', array( 'jquery') );
+	wp_localize_script(
+		'backupbuddy_live_admin_bar',
+		'backupbuddy_live_admin_bar_translations',
+		array(
+			'currently' => __( 'Currently', 'it-l10n-backupbuddy' )
+		)
+	);
+	wp_enqueue_script( 'backupbuddy_live_admin_bar' );
+	wp_enqueue_style( 'backupbuddy_live_admin_bar_style', pb_backupbuddy::plugin_url() . '/destinations/live/admin_bar.css' );
+}
+function backupbuddy_live_statsPoll() {
+	if ( ! current_user_can( pb_backupbuddy::$options['role_access'] ) ) {
+		return;
+	}
+	
+	include( pb_backupbuddy::plugin_path() . '/destinations/live/_statsPoll.php' );
+}
+if ( 'disconnect' != pb_backupbuddy::_GET( 'live_action' ) ) { // If not disconnecting from Live this pageload.
+	foreach( pb_backupbuddy::$options['remote_destinations'] as $destination ) { // Look for Live destination.
+		if ( ( 'live' == $destination['type'] ) && ( isset( $destination['show_admin_bar'] ) ) && ( '1' == $destination['show_admin_bar'] ) ) {
+			add_action( 'admin_bar_menu', 'backupbuddy_live_admin_bar_menu', 999 );
+			add_action( 'admin_enqueue_scripts', 'backupbuddy_live_admin_bar_script' );
+			add_action( 'admin_footer', 'backupbuddy_live_statsPoll', 999 );
+			break;
+		}
+	}
+}
+/***** END STASH LIVE ADMIN BAR *****/
+
+// v7.0 announcement banner.
+function backupbuddy_admin_notices() {
+	if ( ! current_user_can( pb_backupbuddy::$options['role_access'] ) ) {
+		return;
+	}
+	
+	if ( version_compare( phpversion(), '5.3', '>=' ) ) {
+		if ( is_network_admin() ) {
+			$stashlive_url = network_admin_url( 'admin.php' );
+		} else {
+			$stashlive_url = admin_url( 'admin.php' );
+		}
+		$stashlive_url .= '?page=pb_backupbuddy_live';
+
+		pb_backupbuddy::disalert( 'backupbuddy_version_seven', '<p><span class="backupbuddy-icon-drive"></span>Real-time backups are here. <a class="backupbuddy-nag-button pb_backupbuddy_disalert" href="' . $stashlive_url . '" alt="' . pb_backupbuddy::ajax_url( 'disalert' ) . '">Get Started</a><a class="backupbuddy-nag-button" href="https://ithemes.com/backupbuddy-stash-live-is-here" target="_blank">See What\'s New</a></p>' );
+		wp_enqueue_style( 'backupbuddy_version_seven_style', pb_backupbuddy::plugin_url() . '/css/version_seven.css' );
+	}
+}
+if ( ( !is_multisite() ) || ( is_multisite() && is_network_admin() ) ) { // Only show if standalone OR in main network admin.
+	add_action( 'admin_notices', 'backupbuddy_admin_notices' );
+}
+
+
+// Global admin javascript files.
+function backupbuddy_global_admin_scripts() {
+	wp_register_script( 'backupbuddy_global_admin_scripts', pb_backupbuddy::plugin_url() . '/js/global_admin.js', array( 'jquery') );
+	wp_enqueue_script( 'backupbuddy_global_admin_scripts' );
+}
+add_action( 'admin_enqueue_scripts', 'backupbuddy_global_admin_scripts' );
+

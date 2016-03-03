@@ -345,6 +345,7 @@ class HTTP_Request2_Adapter_Curl extends HTTP_Request2_Adapter
                     curl_setopt($ch, self::$sslContextMap[$name], $value);
                 }
             }
+            curl_setopt($ch, CURLOPT_SSLVERSION, 1); // EDIT Nov 19, 2014: Force TLS.
         }
 
         $headers = $this->request->getHeaders();

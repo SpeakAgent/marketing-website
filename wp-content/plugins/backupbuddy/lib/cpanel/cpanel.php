@@ -26,7 +26,6 @@ if ( $create_db_result === true ) {
  *	
  *	Manage some cpanel settings.
  *	
- *	@author		Dustin Bolton <http://dustinbolton.com> Sept 2012. Updated for api2 by Jeremy.
  */
 class pb_backupbuddy_cpanel {
 

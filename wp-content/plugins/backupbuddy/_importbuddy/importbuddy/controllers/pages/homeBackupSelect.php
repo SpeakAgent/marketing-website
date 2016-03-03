@@ -99,10 +99,17 @@ function get_archives_list() {
 	
 	// List backup files in this directory.
 	$backup_archives = array();
-	$backup_archives_glob = glob( ABSPATH . 'backup*.zip' );
-	if ( !is_array( $backup_archives_glob ) || empty( $backup_archives_glob ) ) { // On failure glob() returns false or an empty array depending on server settings so normalize here.
-		$backup_archives_glob = array();
+	$backup_zips = glob( ABSPATH . 'backup*.zip' );
+	if ( ! is_array( $backup_zips ) ) {
+		$backup_zips = array();
 	}
+	$snapshot_zips = glob( ABSPATH . 'snapshot*.zip' );
+	if ( ! is_array( $snapshot_zips ) ) {
+		$snapshot_zips = array();
+	}
+	$backup_archives_glob = array_merge( $backup_zips, $snapshot_zips );
+	unset( $backup_zips );
+	unset( $snapshot_zips );
 	foreach( $backup_archives_glob as $backup_archive ) {
 		$comment = pb_backupbuddy::$classes['zipbuddy']->get_comment( $backup_archive );
 		$comment = backupbuddy_core::normalize_comment_data( $comment );

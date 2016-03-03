@@ -3,7 +3,7 @@
 if ( ! current_user_can( pb_backupbuddy::$options['role_access'] ) ) {
 	die( 'Error #473623. Access Denied.' );
 }
-//pb_backupbuddy::verify_nonce();
+pb_backupbuddy::verify_nonce();
 
 
 echo '<h3 style="margin-top: 0;">' . __( 'Rollback Complete', 'it-l10n-backupbuddy' ) . '</h3>';

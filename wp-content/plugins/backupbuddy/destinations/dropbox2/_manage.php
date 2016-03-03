@@ -3,6 +3,10 @@
 // Incoming variables: $destination
 
 
+if ( isset( $destination['disabled'] ) && ( '1' == $destination['disabled'] ) ) {
+	die( __( 'This destination is currently disabled based on its settings. Re-enable it under its Advanced Settings.', 'it-l10n-backupbuddy' ) );
+}
+
 //pb_backupbuddy::$ui->title( 'Dropbox destination "' . htmlentities( $destination['title'] ) . '"' );
 
 
@@ -13,9 +17,12 @@ if ( '' != pb_backupbuddy::_GET( 'cpy' ) ) {
 	pb_backupbuddy::alert( 'The remote file is now being copied to your local backups. If the backup gets marked as bad during copying, please wait a bit then click the `Refresh` icon to rescan after the transfer is complete.' );
 	echo '<br>';
 	pb_backupbuddy::status( 'details',  'Scheduling Cron for creating Dropbox copy.' );
-	backupbuddy_core::schedule_single_event( time(), pb_backupbuddy::cron_tag( 'process_destination_copy' ), array( $destination, pb_backupbuddy::_GET( 'cpy' ) ) );
-	spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
-	update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+	backupbuddy_core::schedule_single_event( time(), 'process_destination_copy', array( $destination, pb_backupbuddy::_GET( 'cpy' ) ) );
+	
+	if ( '1' != pb_backupbuddy::$options['skip_spawn_cron_call'] ) {
+		update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+		spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
+	}
 }
 
 
@@ -48,7 +55,7 @@ foreach( (array)$files_result['contents'] as $file ) { // Loop through files loo
 	$filename = str_ireplace( $files_result['path'] . '/', '', $file['path'] ); // Remove path from filename.
 	if ( isset( $file['client_mtime'] ) ) {
 		$last_modified = strtotime( $file['client_mtime'] );
-		$last_modified = pb_backupbuddy::$format->date( pb_backupbuddy::$format->localize_time( $last_modified ) ) . '<br /><span class="description">(' . pb_backupbuddy::$format->time_ago( $last_modified ) . ' ago)</span>';
+		//$last_modified = pb_backupbuddy::$format->date( pb_backupbuddy::$format->localize_time( $last_modified ) ) . '<br /><span class="description">(' . pb_backupbuddy::$format->time_ago( $last_modified ) . ' ago)</span>';
 	} else {
 		$last_modified = '<i>' . __( 'Unknown', 'it-l10n-backupbuddy' ) . '</i>';
 	}
@@ -80,7 +87,7 @@ foreach( (array)$files_result['contents'] as $file ) { // Loop through files loo
 
 
 // For sorting by array item value.
-function pb_backupbuddy_aasort (&$array, $key) {
+function pb_backupbuddy_aasort(&$array, $key) {
 	$sorter=array();
 	$ret=array();
 	reset($array);
@@ -93,8 +100,15 @@ function pb_backupbuddy_aasort (&$array, $key) {
 	}
 	$array=$ret;
 }
+
+// Fix ordering.
 pb_backupbuddy_aasort( $backup_files, 'file_timestamp' ); // Sort by multidimensional array with key start_timestamp.
 $backup_files = array_reverse( $backup_files ); // Reverse array order to show newest first.
+
+// Format timestamp.
+foreach( $backup_files as &$backup_file ) {
+	$backup_file[1] = pb_backupbuddy::$format->date( pb_backupbuddy::$format->localize_time( $backup_file[1] ) ) . '<br /><span class="description">(' . pb_backupbuddy::$format->time_ago( $backup_file[1] ) . ' ago)</span>';
+}
 
 $urlPrefix = pb_backupbuddy::ajax_url( 'remoteClient' ) . '&destination_id=' . htmlentities( pb_backupbuddy::_GET( 'destination_id' ) );
 

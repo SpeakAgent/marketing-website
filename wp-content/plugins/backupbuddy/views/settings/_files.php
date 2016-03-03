@@ -25,7 +25,7 @@ if ( isset( pb_backupbuddy::$options['profiles'][$profile] ) ) {
 		jQuery(document).on( 'click', '.pb_backupbuddy_filetree_exclude', function(){
 			text = jQuery(this).parent().parent().find( 'a' ).attr( 'rel' );
 			if ( ( text == 'wp-config.php' ) || ( text == '/wp-content/' ) || ( text == '/wp-content/uploads/' ) || ( text == '<?php echo '/' . str_replace( ABSPATH, '', backupbuddy_core::getBackupDirectory() ); ?>' ) || ( text == '<?php echo '/' . str_replace( ABSPATH, '', backupbuddy_core::getTempDirectory() ); ?>' ) ) {
-				alert( '<?php _e('You cannot exclude /wp-content/, the uploads directory, or BackupBuddy directories which will be automatically excluded.  However, you may exclude subdirectories within these. BackupBuddy directories such as backupbuddy_backups are automatically excluded and cannot be added to exclusion list.', 'it-l10n-backupbuddy' );?>' );
+				alert( "<?php _e('You cannot exclude /wp-content/, the uploads directory, or BackupBuddy directories which will be automatically excluded.  However, you may exclude subdirectories within these. BackupBuddy directories such as backupbuddy_backups are automatically excluded and cannot be added to exclusion list.', 'it-l10n-backupbuddy' );?>" );
 			} else {
 				jQuery('#pb_backupbuddy_excludes').val( text + "\n" + jQuery('#pb_backupbuddy_excludes').val() );
 			}
@@ -42,7 +42,7 @@ require_once( '_filetree.php' );
 
 
 if ( $profile_array['type'] == 'defaults' ) {
-	$before_text = __('Excluded files & directories (relative to WordPress root)' , 'it-l10n-backupbuddy' );
+	$before_text = __('<b>Default</b> excluded files & directories (relative to WordPress root)' , 'it-l10n-backupbuddy' );
 } else {
 	$before_text = __('Excluded files & directories for this profile', 'it-l10n-backupbuddy' );
 		//'<br><span class="description">' . __( '(Global defaults do not apply; relative to WordPress root)' , 'it-l10n-backupbuddy' ) . '</span>';

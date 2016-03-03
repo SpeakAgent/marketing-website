@@ -54,6 +54,8 @@ $accent-dark: #CF9204;
 $accent-light: #FFE98E;
 $shadow-primary: #220909;
 
+$color-palesaffron: #FFF7D4;
+
 $iceblue: #CEFFFB;
 $danger-color: #DA1111;
 
@@ -241,7 +243,7 @@ h6 {
 }
 
 h1 {
-    font-weight: 300;
+    font-weight: 900;
     @include rem('font-size',36px);
     @include rem('margin-bottom',24px);
 }
@@ -257,7 +259,7 @@ h3 {
 }
 
 h4 {
-   @include rem('font-size',16px);
+   @include rem('font-size',18px);
    font-weight: 700;
 }
 
@@ -301,7 +303,7 @@ fieldset {
 input,
 select,
 textarea {
-    background-color: $accent-light;
+    background-color: $color-palesaffron;
     border: 1px solid $teritary-color;
     box-shadow: none;
     color: #333;
@@ -700,9 +702,9 @@ a.alignright {
     @include box-shadow(rgba(#000, 0.15) 0 2px 0px);
 }
 .has-inner-shadow {
-    @include box-shadow(rgba(#000, 0.15) 0 2px 0px inset);
+    @include box-shadow(rgba(#000, 0.15) 0 1px 0px inset);
     &:focus, &:active {
-        @include box-shadow(rgba(#000, 0) 0 0px 0px inset);
+        @include box-shadow(rgba(#000, 0.2) 0 2px 0px inset);
     }
 }
 

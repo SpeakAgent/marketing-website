@@ -69,7 +69,7 @@ pb_backupbuddy::disalert( 'restore_caution', __( 'Caution: Restored files may ov
 				files.push( jQuery(this).next( 'a' ).attr( 'rel' ) );
 			});
 			if ( files == '' ) {
-				alert( '<?php _e( "You must select one or more files to restore.", "it-l10n-backupbuddy" ); ?>' );
+				alert( "<?php _e( "You must select one or more files to restore.", "it-l10n-backupbuddy" ); ?>" );
 				return false;
 			}
 			

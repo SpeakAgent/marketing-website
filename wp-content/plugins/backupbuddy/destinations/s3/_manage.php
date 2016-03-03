@@ -2,6 +2,9 @@
 // @author Dustin Bolton 2013.
 // Incoming variables: $destination
 
+if ( isset( $destination['disabled'] ) && ( '1' == $destination['disabled'] ) ) {
+	die( __( 'This destination is currently disabled based on its settings. Re-enable it under its Advanced Settings.', 'it-l10n-backupbuddy' ) );
+}
 ?>
 
 
@@ -48,7 +51,6 @@ $remote_path = pb_backupbuddy_destination_s3::get_remote_path( $settings['direct
 
 
 // Welcome text.
-pb_backupbuddy::$ui->title( __( 'S3 Destination', 'it-l10n-backupbuddy' ) . ' "' . $destination['title'] . '"' );
 $manage_data = pb_backupbuddy_destination_s3::get_credentials( $settings );
 
 
@@ -105,9 +107,12 @@ if ( pb_backupbuddy::_GET( 'cpy_file' ) != '' ) {
 	pb_backupbuddy::alert( 'The remote file is now being copied to your local backups. If the backup gets marked as bad during copying, please wait a bit then click the `Refresh` icon to rescan after the transfer is complete.' );
 	echo '<br>';
 	pb_backupbuddy::status( 'details',  'Scheduling Cron for creating S3 copy.' );
-	backupbuddy_core::schedule_single_event( time(), pb_backupbuddy::cron_tag( 'process_remote_copy' ), array( 's3', pb_backupbuddy::_GET( 'cpy_file' ), $settings ) );
-	spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
-	update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+	backupbuddy_core::schedule_single_event( time(), 'process_remote_copy', array( 's3', pb_backupbuddy::_GET( 'cpy_file' ), $settings ) );
+	if ( '1' != pb_backupbuddy::$options['skip_spawn_cron_call'] ) {
+		update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+		spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
+	}
+	
 }
 
 
@@ -124,7 +129,8 @@ $prefix = backupbuddy_core::backup_prefix();
 $response = $s3->list_objects(
 	$manage_data['bucket'],
 	array(
-		'prefix' => $remote_path
+		'prefix' => $remote_path,
+		'max-keys' => 200
 	)
 ); // list all the files in the subscriber account
 
@@ -148,15 +154,7 @@ foreach( $response->body->Contents as $object ) {
 	
 	$last_modified = strtotime( $object->LastModified );
 	$size = (double) $object->Size;
-	if ( stristr( $file, '-db-' ) !== FALSE ) {
-		$backup_type = 'Database';
-	} elseif ( stristr( $file, '-full-' ) !== FALSE ) {
-		$backup_type = 'Full';
-	} elseif( $file == 'importbuddy.php' ) {
-		$backup_type = 'ImportBuddy Tool';
-	} else {
-		$backup_type = 'Unknown';
-	}
+	$backup_type = backupbuddy_core::getBackupTypeFromFile( $file );
 	
 	// Generate array of table rows.
 	while( isset( $backup_list_temp[$last_modified] ) ) { // Avoid collisions.
@@ -170,7 +168,7 @@ foreach( $response->body->Contents as $object ) {
 		pb_backupbuddy::$format->time_ago( $last_modified ) .
 		' ago)</span>',
 		pb_backupbuddy::$format->file_size( $size ),
-		$backup_type
+		backupbuddy_core::pretty_backup_type( $backup_type )
 	);
 
 }
@@ -191,6 +189,7 @@ if ( count( $backup_list ) == 0 ) {
 	_e( 'You have not completed sending any backups to this S3 destination for this site yet.', 'it-l10n-backupbuddy' );
 	echo '</b>';
 } else {
+	echo '<br><br>Limited to displaying 200 files. To view more files please upgrade to the S3 v2 destination.<br><br>';
 	pb_backupbuddy::$ui->list_table(
 		$backup_list,
 		array(

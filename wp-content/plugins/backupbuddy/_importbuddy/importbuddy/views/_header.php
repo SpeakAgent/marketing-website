@@ -21,7 +21,7 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) || ( true !== PB_IMPORTBUDDY ) ) {
 			var backupbuddy_errors_encountered = 0; // number of errors sent via log.
 			
 			function pb_status_append( json ) {
-				if( 'undefined' === typeof statusBox ) { // No status box yet so may need to create it.
+				if ( 'undefined' === typeof statusBox ) { // No status box yet so may need to create it.
 					statusBox = jQuery( '#backupbuddy_messages' );
 					if( statusBox.length == 0 ) { // No status box yet so suppress.
 						return;
@@ -61,13 +61,25 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) || ( true !== PB_IMPORTBUDDY ) ) {
 			
 			
 			// Used in BackupBuddy _backup-perform.php and ImportBuddy _header.php and _rollback.php
-			function backupbuddy_log( json ) {
+			function backupbuddy_log( json, classType ) {
+				if ( 'undefined' === typeof statusBox ) { // No status box yet so may need to create it.
+					statusBox = jQuery( '#backupbuddy_messages' );
+					if( statusBox.length == 0 ) { // No status box yet so suppress.
+						return;
+					}
+				}
 				
 				message = '';
 				
 				if ( 'string' == ( typeof json ) ) {
+					if ( '' !== classType ) {
+						json = '<span class="backupbuddy_log_' + classType + '">' + json + '</span>';
+					}
 					message = "-----------\t\t-------\t-------\t" + json;
 				} else {
+					if ( '' !== classType ) {
+						json.data = '<span class="backupbuddy_log_' + classType + '">' + json.data + '</span>';
+					}
 					message = json.date + '.' + json.u + " \t" + json.run + "sec \t" + json.mem + "MB\t" + json.data;
 				}
 				
@@ -101,7 +113,7 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) || ( true !== PB_IMPORTBUDDY ) ) {
 
 				if ( '' !== troubleURL ) {
 					// Display error in error div with class error_alert_box.
-					message = message + ' <a href="' + troubleURL + '" target="_new">Click to <b>view error details</b> in the Knowledge Base</a>';
+					message = message + ' <a href="' + troubleURL + '" target="_blank">Click to <b>view error details</b> in the Knowledge Base</a>';
 				}
 				jQuery( '.backupbuddy_error_list' ).append( '<li>' +  message + '</li>' );
 				jQuery( '.error_alert_box' ).show();
@@ -187,14 +199,12 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) || ( true !== PB_IMPORTBUDDY ) ) {
 					return true;
 				});
 				
-				
-				
 				// Pre-load final steps so it can be displayed even though deleted.
-				window.stepTemplateCleanupSettings = new EJS({url: 'importbuddy/views/cleanupSettings.ejs'});
-				window.stepTemplatefinalCleanup = new EJS({url: 'importbuddy/views/finalCleanup.ejs'});
-				
+				window.stepTemplateCleanupSettings = new EJS({url: 'importbuddy/views/cleanupSettings.htm'});
+				window.stepTemplatefinalCleanup = new EJS({url: 'importbuddy/views/finalCleanup.htm'});
 				
 			});
+			
 			
 			function bb_action( action, note ) {
 				console.log( 'bb_action: `' + action + '`.' );
@@ -202,41 +212,28 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) || ( true !== PB_IMPORTBUDDY ) ) {
 				} else if ( 'iframeLoaded' == action ) { // Hide iframe loading graphic.
 					//NProgress.done();
 				} else if ( 'importingTable' == action ) {
-					// note contains table name
-					//console.log( 'importing: ' + note );
-					jQuery('#importingDatabase-progressMessage').text( 'Restoring ' + note + ' ...' );
-				
+					jQuery('#importingDatabase-progressMessage').text( 'Restoring ' + note + ' ...' ); // note contains table name
 				} else if ( 'databaseRestoreSuccess' == action ) {
 					jQuery('#importingDatabase-progressMessage').text( 'Database Restore Successful' );
 				} else if ( 'databaseRestoreSkipped' == action ) {
 					jQuery('#importingDatabase-progressMessage').text( 'Database Restore Skipped' );
 				} else if ( 'databaseRestoreFailed' == action ) {
 					jQuery('#importingDatabase-progressMessage').text( 'Database Restore Failed' );
-
 				} else if ( 'databaseMigrationSuccess' == action ) {
 					jQuery('#migratingDatabase-progressMessage').text( 'Database Migration Successful' );
 				} else if ( 'databaseMigrationSkipped' == action ) {
 					jQuery('#migratingDatabase-progressMessage').text( 'Database Migration Skipped' );
 				} else if ( 'databaseMigrationFailed' == action ) {
 					jQuery('#migratingDatabase-progressMessage').text( 'Database Migration Failed' );
-					
 				} else if ( 'filesRestoreSuccess' == action ) {
 					jQuery('#unzippingFiles-progressMessage').text( 'Completed Restoring Files' );
 				} else if ( 'filesRestoreSkipped' == action ) {
 					jQuery('#unzippingFiles-progressMessage').text( 'Skipped Restoring Files' );
-				
 				} else {
 					console.log( 'Unknown JS bb_action `' + action + '` with note `' + note + '`.' );
 				}
 			}
 			
-			/*
-			function bb_restoreData( data ) {
-			 
-				restoreData = data;
-				console.dir( restoreData );
-			}
-			*/
 			
 			function bb_showStep( step, data ) {
 				window.restoreData = data;
@@ -253,14 +250,54 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) || ( true !== PB_IMPORTBUDDY ) ) {
 				} else if ( 'finalCleanup' == step ) {
 					jQuery('.main_box').html( jwindow.stepTemplatefinalCleanup.render(data) );
 				} else { // Normal step.
-					jQuery('.main_box').html( new EJS({url: 'importbuddy/views/' + step + '.ejs'}).render(data) );
+					jQuery('.main_box').html( new EJS({url: 'importbuddy/views/' + step + '.htm'}).render(data) );
 				}
 			}
+			
 			
 			function tip( tip ) {
 				return '<a class="pluginbuddy_tip" title="' + tip + '"><img src="importbuddy/pluginbuddy/images/pluginbuddy_tip.png" alt="(?)"></a>';
 			}
+			
+			
 		</script>
+		<style>
+			#backupbuddy_messages {
+				background: #fff;
+				border: 1px solid #CFCFCF;
+				-moz-border-radius: 25px;
+				height: 200px;
+				overflow: scroll;
+				padding: 12px;
+				white-space: pre;
+				width: 100%;
+				margin: 0;
+				box-sizing: border-box;
+				resize: both;
+			}
+			.backupbuddy_log_error {
+				color: red;
+				font-weight: bold;
+			}
+			.backupbuddy_log_warning {
+				color: orange;
+				font-weight: bold;
+			}
+			.backupbuddy_log_notice {
+				color: blue;
+				font-weight: bold;
+			}
+			#backupbuddy_messages::-webkit-scrollbar {
+				-webkit-appearance: none;
+				width: 11px;
+				height: 11px;
+			}
+			#backupbuddy_messages::-webkit-scrollbar-thumb {
+				border-radius: 8px;
+				border: 2px solid white; /* should match background, can't be transparent */
+				background-color: rgba(0, 0, 0, .5);
+			}​
+		</style>
 	</head>
 		<?php
 		//if ( pb_backupbuddy::$options['display_mode'] == 'normal' ) {
@@ -283,23 +320,17 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) || ( true !== PB_IMPORTBUDDY ) ) {
 						if ( pb_backupbuddy::_GET( 'page' ) == 'dbreplace' ) { echo 'class="activePage" '; }
 						echo 'href="?page=dbreplace">Database Text Replace</a>';
 						
-						echo '<a href="http://ithemes.com/codex/page/BackupBuddy" target="_new">Knowledge Base</a>';
-						echo '<a href="http://ithemes.com/support/" target="_new">Support Forum</a>';
+						echo '<a href="http://ithemes.com/codex/page/BackupBuddy" target="_blank">Knowledge Base</a>';
+						echo '<a href="http://ithemes.com/support/" target="_blank">Support</a>';
 					}
 					
 					$simpleVersion = pb_backupbuddy::$options['bb_version'];
 					if ( strpos( pb_backupbuddy::$options['bb_version'], ' ' ) > 0 ) {
 						$simpleVersion = substr( pb_backupbuddy::$options['bb_version'], 0, strpos( pb_backupbuddy::$options['bb_version'], ' ' ) );
 					}
-					echo '<a href="http://ithemes.com/purchase/backupbuddy/" target="_new" title="Visit BackupBuddy Website in New Window" style="float: right;"><img src="importbuddy/images/icon_menu_32x32.png" width="16" height="16">&nbsp;&nbsp;ImportBuddy v' . $simpleVersion . ' for BackupBuddy</a>';
+					echo '<a href="http://ithemes.com/purchase/backupbuddy/" target="_blank" title="Visit BackupBuddy Website in New Window" style="float: right;"><img src="importbuddy/images/icon_menu_32x32.png" width="16" height="16">&nbsp;&nbsp;ImportBuddy v' . $simpleVersion . ' for BackupBuddy</a>';
 				echo '</div>';
 			}
-			//echo '<center><img src="importbuddy/images/bb-logo.png" title="BackupBuddy Restoration & Migration Tool" style="margin-top: 10px;"></center><br>';
-		//} else { // Magic migration mode inside WordPress (in an iframe).
-		//	echo '<body onLoad="window.parent.scroll(0,0);">'; // Auto scroll to top of parent while in iframe.
-		//}
-		
-		//<a href="http://ithemes.com/codex/page/BackupBuddy" style="text-decoration: none;">Need help? See the <b>Knowledge Base</b> for tutorials & more.</a><br>
 		?>
 		
 		<div style="position: relative; height: 70px; margin-top: 50px; width: 100%; overflow: hidden;">
@@ -314,17 +345,17 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) || ( true !== PB_IMPORTBUDDY ) ) {
 		<div style="display: none;" id="pb_importbuddy_blankalert"><?php pb_backupbuddy::alert( '#TITLE# #MESSAGE#', true, '9021' ); ?></div>
 		
 		<div class="main_box_wrap">
-			<!-- <div class="main_box_head"><span id="pageTitle"></span> <a style="font-size: 0.6em; float: right; margin-top: 6px;" href="#" onclick="jQuery('#pb_backupbuddy_status_wrap').toggle();">Show / Hide Advanced Status Details</a></div> -->
 			
 			
 			<?php if ( true === Auth::is_authenticated() ) { // Only record logging if authenticated. ?>
 				<div class="main_box_head">
 					<span id="pageTitle">&nbsp;</span>
-					<a style="font-size: 0.6em; float: right; margin-top: 6px;" href="javascript:void(0)" onclick="jQuery('#pb_backupbuddy_status_wrap').toggle();">Show / Hide Advanced Status Details</a>
+					<a style="font-size: 0.6em; float: right; margin-top: 6px;" href="javascript:void(0)" onclick="jQuery('#pb_backupbuddy_status_wrap').toggle();">Display Status Log</a>
 				</div>
 				<?php
 				echo pb_backupbuddy::$classes['import']->status_box( 'Status Log for for ImportBuddy from BackupBuddy v' . pb_backupbuddy::$options['bb_version'] . '...' );
 				?>
+				
 				<script>importbuddy_loadRestoreEvents();</script>
 				<?php
 			} else { ?>
@@ -336,13 +367,13 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) || ( true !== PB_IMPORTBUDDY ) ) {
 			<div class="main_box_head error_alert_box" style="display: none;">
 				<span class="error_alert_title">Error(s)</span>
 				<ul class="backupbuddy_error_list">
-					<!-- <li>Error #123onlyAtest: An error has happened. This is a test.</li> -->
+					<!-- <li>Error #123onlyAtest: An error has NOT happened. This is a only test.</li> -->
 				</ul>
 			</div>
 			<div class="main_box_head warning_alert_box" style="display: none;">
 				<span class="error_warning_title">Alert(s)</span>
 				<ul class="backupbuddy_warning_list">
-					<!-- <li>Error #123onlyAtest: An error has happened. This is a test.</li> -->
+					<!-- <li>Error #123onlyAtest: A warning has NOT happened. This is a only test.</li> -->
 				</ul>
 			</div>
 			

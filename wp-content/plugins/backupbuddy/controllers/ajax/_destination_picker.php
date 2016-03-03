@@ -1,5 +1,6 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
 
 pb_backupbuddy::load_style( 'backupProcess.css' );
 pb_backupbuddy::load_style( 'backupProcess2.css' );
@@ -26,7 +27,7 @@ if ( is_numeric( pb_backupbuddy::_GET( 'tab' ) ) ) {
 if ( $mode == 'migration' ) {
 	$picker_url = pb_backupbuddy::ajax_url( 'migration_picker' );
 } else {
-	if ( '1' == pb_backupbuddy::_GET( 'sending' ) ) {
+	if ( ( '1' == pb_backupbuddy::_GET( 'sending' ) ) || ( '1' == pb_backupbuddy::_GET( 'selecting' ) ) ) {
 		$picker_url = pb_backupbuddy::ajax_url( 'destination_picker' );
 	} else {
 		$picker_url = pb_backupbuddy::ajax_url( 'destinationTabs' );
@@ -97,7 +98,7 @@ pb_backupbuddy::load_style( 'filetree.css' );
 						<?php
 						}
 						?>
-						window.location.href = '<?php echo $picker_url . '&callback_data=' . pb_backupbuddy::_GET( 'callback_data' ); ?>&sending=<?php echo pb_backupbuddy::_GET( 'sending' ); ?>&alert_notice=' + encodeURIComponent( 'New destination successfully added.' );
+						window.location.href = '<?php echo $picker_url . '&callback_data=' . pb_backupbuddy::_GET( 'callback_data' ); ?>&sending=<?php echo pb_backupbuddy::_GET( 'sending' ); ?>&selecting=<?php echo pb_backupbuddy::_GET( 'selecting' ); ?>&alert_notice=' + encodeURIComponent( 'New destination successfully added.' );
 					} else if ( data == 'Settings saved.' ) {
 						jQuery( '.pb_backupbuddy_destpicker_saveload' ).hide();
 						jQuery( '.nav-tab-active' ).find( '.destination_title' ).text( new_title );
@@ -117,6 +118,10 @@ pb_backupbuddy::load_style( 'filetree.css' );
 		// Select a destionation to return to parent page.
 		jQuery('.bb_destinations-existing .bb_destination-item a').click(function(e) {
 			e.preventDefault();
+			if ( jQuery(this).parent().hasClass( 'bb_destination-item-disabled' ) ) {
+				alert( 'This remote destination is unavailable.  It is either disabled in its Advanced Settings or not compatible with this server.' );
+				return false;
+			}
 			
 			<?php
 			if ( $mode == 'migration' ) {
@@ -319,7 +324,7 @@ if ( pb_backupbuddy::_GET( 'add' ) != '' ) {
 	
 	$destination_type = pb_backupbuddy::_GET( 'add' );
 	
-	echo '<h2>Add New Destination</h2>';
+	//echo '<h2>Add New Destination</h2>';
 	
 	// the following scrollTo is so that once scrolling page down to look at long list of destinations to add, coming here bumps them back to the proper place up top.
 	?>
@@ -330,6 +335,8 @@ if ( pb_backupbuddy::_GET( 'add' ) != '' ) {
 	</script>
 	
 	<?php
+	$destination_info = pb_backupbuddy_destinations::get_info( $destination_type );
+	echo '<h3>' . $destination_info['name'] . '</h3>';
 	echo '<div class="pb_backupbuddy_destpicker_id bb-dest-option" rel="NEW">';
 	$settings = pb_backupbuddy_destinations::configure( array( 'type' => $destination_type ), 'add' );
 	
@@ -353,12 +360,6 @@ if ( pb_backupbuddy::_GET( 'add' ) != '' ) {
 	return;
 }
 
-/*
-pb_backupbuddy::load_script( 'admin.js', true ); // pbframework version due to second param.
-pb_backupbuddy::load_script( 'admin.js' );
-pb_backupbuddy::load_style( 'admin.css', true ); // pbframework version due to second param.
-pb_backupbuddy::load_script( 'tooltip.js', true ); // pbframework version due to second param.
-*/
 
 
 
@@ -380,11 +381,15 @@ if ( $mode == 'migration' ) {
 function pb_bb_add_box( $mode, $picker_url, $hideBack = false ) {
 	?>
 	<div class="bb_destinations-group bb_destinations-new">
-		<h3>What kind of destination do you want to add?</h3>
+		<h3>What kind of destination would you like to add?</h3>
 		<ul>
 			<?php
 			$i = 0;
 			foreach( pb_backupbuddy_destinations::get_destinations_list() as $destination_name => $destination ) {
+				// Never show Deployment ("site") destination here.
+				if ( ( 'site' == $destination['type'] ) || ( 'live' == $destination['type'] ) ) {
+					continue;
+				}
 				
 				if ( $mode == 'migration' ) {
 					if ( ( $destination_name != 'local' ) && ( $destination_name != 'ftp' ) && ( $destination_name != 'sftp' ) ) { // if not local or ftp when in migration mode then skip.
@@ -401,7 +406,7 @@ function pb_bb_add_box( $mode, $picker_url, $hideBack = false ) {
 				
 				$i++;
 				
-				echo '<li class="bb_destination-item bb_destination-' . $destination_name . ' bb_destination-new-item"><a href="' . $picker_url . '&add=' . $destination_name . '&callback_data=' . pb_backupbuddy::_GET( 'callback_data' ) . '&sending=' . pb_backupbuddy::_GET( 'sending' ) . '" rel="' . $destination_name . '">' . $destination['name'] . '</a></li>';
+				echo '<li class="bb_destination-item bb_destination-' . $destination_name . ' bb_destination-new-item"><a href="' . $picker_url . '&add=' . $destination_name . '&callback_data=' . pb_backupbuddy::_GET( 'callback_data' ) . '&sending=' . pb_backupbuddy::_GET( 'sending' ) . '&selecting=' . pb_backupbuddy::_GET( 'selecting' ) . '" rel="' . $destination_name . '">' . $destination['name'] . '</a></li>';
 				if ( $i >= 5 ) {
 					echo '<span class="bb_destination-break"></span>';
 					$i = 0;
@@ -457,7 +462,17 @@ if ( ( pb_backupbuddy::_GET( 'show_add' ) != 'true' ) && ( $destination_list_cou
 							}
 						}
 						
-						echo '<li class="bb_destination-item bb_destination-' . $destination['type'] . '"><a href="javascript:void(0)" title="' . $destination['title'] . '" rel="' . $destination_id . '">' . $destination['title'] . '</a></li>';
+						// Never show Deployment ("site") or BackupBuddy Stash Live destination here.
+						if ( ( 'site' == $destination['type'] ) || ( 'live' == $destination['type'] ) ) {
+							continue;
+						}
+						
+						$disabledClass= '';
+						if ( isset( $destination['disabled'] ) && ( '1' == $destination['disabled'] ) ) {
+							$disabledClass = 'bb_destination-item-disabled';
+						}
+						
+						echo '<li class="bb_destination-item bb_destination-' . $destination['type'] . ' ' . $disabledClass . '"><a href="javascript:void(0)" title="' . $destination['title'] . '" rel="' . $destination_id . '">' . $destination['title'] . '</a></li>';
 					}
 					?>
 					<br><br><br>

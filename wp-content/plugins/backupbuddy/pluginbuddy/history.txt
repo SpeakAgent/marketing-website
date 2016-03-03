@@ -81,3 +81,4 @@
 	Color picker: Added color type to form/settings.
 	
 	Added settings class method: set_value() to overwrite values.
+	

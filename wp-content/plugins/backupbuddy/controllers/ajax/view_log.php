@@ -1,5 +1,7 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
+
 pb_backupbuddy::$ui->ajax_header();
 
 $serial = pb_backupbuddy::_GET( 'serial' );
@@ -12,10 +14,10 @@ if ( ! file_exists( $logFile ) ) {
 $lines = file_get_contents( $logFile );
 $lines = explode( "\n", $lines );
 ?>
-Showing advanced format log file details. By default only errors are logged. Full logging mode will capture all backup details. Log file: <?php echo $logFile; ?><br><br>
+
 <textarea readonly="readonly" id="backupbuddy_messages" wrap="off" style="width: 100%; min-height: 400px; height: 500px; height: 80%; background: #FFF;"><?php
-foreach( (array)$lines as $line ) {
-	$line = json_decode( $line, true );
+foreach( (array)$lines as $rawline ) {
+	$line = json_decode( $rawline, true );
 	//print_r( $line );
 	if ( is_array( $line ) ) {
 		$u = '';
@@ -27,9 +29,17 @@ foreach( (array)$lines as $line ) {
 		echo $line['mem'] . "MB\t";
 		echo $line['event'] . "\t";
 		echo $line['data'] . "\n";
+	} else {
+		echo $rawline . "\n";
 	}
 }
-?></textarea>
+?></textarea><br><br>
+<small>Log file: <?php echo $logFile; ?></small>
+<br>
+<?php
+echo '<small>Last modified: ' . pb_backupbuddy::$format->date( filemtime( $logFile ) ) . ' (' . pb_backupbuddy::$format->time_ago( filemtime( $logFile ) ) . ' ago)';
+?>
+<br><br>
 
 
 <?php

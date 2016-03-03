@@ -13,6 +13,7 @@ if ( ! class_exists( 'backupbuddy_core' ) ) {
 /***** BEGIN CALCULATING CURRENT BACKUP DETAILS *****/
 
 require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
+pb_backupbuddy::status( 'details', 'Fileoptions instance #41.' );
 $backup_options = new pb_backupbuddy_fileoptions( backupbuddy_core::getLogDirectory() . 'fileoptions/' . pb_backupbuddy::$options['last_backup_serial'] . '.txt', $read_only = true );
 if ( true !== ( $result = $backup_options->is_ok() ) ) { // no backup yet or fileoptions file damaged/unavailable.
 	return false;
@@ -38,7 +39,7 @@ foreach( (array)$currentBackup['steps'] as $step ) {
 	if ( '0' == $step['finish_time'] ) {
 		$currentBackupStats['processStepTitle'] = backupbuddy_core::prettyFunctionTitle( $step['function'] );
 		$currentBackupStats['processStepFunction'] = $step['function'];
-		$currentBackupStats['processStepElapsed'] = time() - $step['start_time'];
+		$currentBackupStats['processStepElapsed'] = microtime(true) - $step['start_time'];
 		break;
 	}
 }

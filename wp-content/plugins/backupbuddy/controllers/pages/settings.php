@@ -20,7 +20,7 @@
 		);
 		
 		
-		jQuery( '.nav-tab-2' ).click( function(){
+		jQuery( '.bb-tab-other' ).click( function(){
 			jQuery.post( '<?php echo pb_backupbuddy::ajax_url( 'getMainLog' ); ?>', { }, 
 				function(data) {
 					//data = jQuery.trim( data );
@@ -70,14 +70,30 @@ $data = array(); // To pass to view.
 
 
 
-// Reset settings to defaults.
+// Reset settings to defaults EXCEPT log serial an optionally except remote destinations.
 if ( pb_backupbuddy::_POST( 'reset_defaults' ) != '' ) {
-	if ( call_user_func(  'pb_backupbuddy::reset_options', true ) === true ) {
-		backupbuddy_core::verify_directories( $skipTempGeneration = true ); // Re-verify directories such as backup dir, temp, etc.
-		//pb_backupbuddy::alert( 'Plugin settings have been reset to defaults.' );
-	} else {
-		pb_backupbuddy::alert( 'Unable to reset plugin settings. Verify you are running the latest version.' );
+	pb_backupbuddy::verify_nonce();
+	
+	// Keep log serial.
+	$old_log_serial = pb_backupbuddy::$options['log_serial'];
+
+	$keepDestNote = '';
+	$remote_destinations = pb_backupbuddy::$options['remote_destinations'];
+	pb_backupbuddy::$options = pb_backupbuddy::settings( 'default_options' );
+	if ( '1' == pb_backupbuddy::_POST( 'keep_destinations' ) ) {
+		pb_backupbuddy::$options['remote_destinations'] = $remote_destinations;
+		$keepDestNote = ' ' . __( 'Remote destination settings were not reset.', 'it-l10n-backupbuddy' );
 	}
+	
+	// Replace log serial.
+	pb_backupbuddy::$options['log_serial'] = $old_log_serial;
+
+	pb_backupbuddy::save();
+	
+	backupbuddy_core::verify_directories( $skipTempGeneration = true ); // Re-verify directories such as backup dir, temp, etc.
+	$resetNote = __( 'Plugin settings have been reset to defaults.', 'it-l10n-backupbuddy' );
+	pb_backupbuddy::alert( $resetNote . $keepDestNote );
+	backupbuddy_core::addNotification( 'settings_reset', 'Plugin settings reset', $resetNote . $keepDestNote );
 }
 
 
@@ -123,6 +139,7 @@ if ( isset( $_POST['pb_backupbuddy_backup_directory'] ) ) {
 					$fileoptions_files = array();
 				}
 				foreach( $fileoptions_files as $fileoptions_file ) {
+					pb_backupbuddy::status( 'details', 'Fileoptions instance #21.' );
 					$backup_options = new pb_backupbuddy_fileoptions( $fileoptions_file );
 					if ( true !== ( $result = $backup_options->is_ok() ) ) {
 						pb_backupbuddy::status( 'error', __('Unable to access fileoptions data.', 'it-l10n-backupbuddy' ) . ' Error: ' . $result );
@@ -174,20 +191,36 @@ if ( pb_backupbuddy::_POST( 'pb_backupbuddy_importbuddy_pass_hash' ) != pb_backu
 
 
 
-/* BEGIN REPLACING IMPORTBUDDY/REPAIRBUDDY_PASS_HASH WITH VALUE OF ACTUAL HASH */
+/* BEGIN REPLACING IMPORTBUDDY WITH VALUE OF ACTUAL HASH */
 if ( isset( $_POST['pb_backupbuddy_importbuddy_pass_hash'] ) && ( '' == $_POST['pb_backupbuddy_importbuddy_pass_hash'] ) ) { // Clear out length if setting to blank.
 	pb_backupbuddy::$options['importbuddy_pass_length'] = 0;
+	pb_backupbuddy::$options['importbuddy_pass_hash'] = ''; // Clear out hash when emptying.
 }
 if ( ( str_replace( ')', '', pb_backupbuddy::_POST( 'pb_backupbuddy_importbuddy_pass_hash' ) ) != '' ) && ( md5( pb_backupbuddy::_POST( 'pb_backupbuddy_importbuddy_pass_hash' ) ) != pb_backupbuddy::$options['importbuddy_pass_hash'] ) ) {
 	pb_backupbuddy::$options['importbuddy_pass_length'] = strlen( pb_backupbuddy::_POST( 'pb_backupbuddy_importbuddy_pass_hash' ) );
 	$_POST['pb_backupbuddy_importbuddy_pass_hash'] = md5( pb_backupbuddy::_POST( 'pb_backupbuddy_importbuddy_pass_hash' ) );
+	$_POST['pb_backupbuddy_importbuddy_pass_hash_confirm'] = '';
 } else { // Keep the same.
 	if ( $importbuddy_pass_match_fail !== true ) { // keep the same
 		$_POST['pb_backupbuddy_importbuddy_pass_hash'] = pb_backupbuddy::$options['importbuddy_pass_hash'];
+		$_POST['pb_backupbuddy_importbuddy_pass_hash_confirm'] = '';
 	}
 }
 // Set importbuddy dummy text to display in form box. Equal length to the provided password.
 $data['importbuddy_pass_dummy_text'] = str_pad( '', pb_backupbuddy::$options['importbuddy_pass_length'], ')' );
+$_POST['pb_backupbuddy_importbuddy_pass_hash_confirm'] = ''; // Always clear confirmation after processing it.
+
+
+
+// Run periodic cleanup to make sure high security mode changes are applied.
+$lockMode = 0;
+if ( isset( $_POST['pb_backupbuddy_lock_archives_directory'] ) ) {
+	$lockMode = $_POST['pb_backupbuddy_lock_archives_directory'];
+}
+if ( $lockMode != pb_backupbuddy::$options['lock_archives_directory'] ) { // Setting changed.
+	require_once( pb_backupbuddy::plugin_path() . '/classes/housekeeping.php' );
+	backupbuddy_housekeeping::run_periodic( 0 ); // 0 cleans up everything even if not very old.
+}
 
 
 
@@ -206,7 +239,11 @@ if ( is_multisite() ) {
 // Load settings view.
 pb_backupbuddy::load_view( 'settings', $data );
 
-
+/*
+echo '<pre>';
+print_r( pb_backupbuddy::$options );
+echo '</pre>';
+*/
 
 ?>
 <br style="clear: both;">

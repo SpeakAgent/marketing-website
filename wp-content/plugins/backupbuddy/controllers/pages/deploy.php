@@ -1,9 +1,45 @@
 <?php
 pb_backupbuddy::$ui->title(
 	__( 'Deploy Database', 'it-l10n-backupbuddy' ) .
-	' &nbsp;&nbsp; <a style="font-size: 0.6em;" href="#" onClick="jQuery(\'#pb_backupbuddy_status_wrap\').toggle();">Show / Hide Advanced Status Details</a>'
+	' &nbsp;&nbsp; <a style="font-size: 0.6em;" href="#" onClick="jQuery(\'#pb_backupbuddy_status_wrap\').toggle();">Display Status Log</a>'
 );
 
+if ( ! defined( 'BACKUPBUDDY_API_ENABLE' ) || ( TRUE != BACKUPBUDDY_API_ENABLE ) ) {
+	pb_backupbuddy::alert( "Make sure the following is in your wp-config.php file on this server:<br><textarea style='width: 100%;' disabled='disabled'>define( 'BACKUPBUDDY_API_ENABLE', true ); // Requires API key to access.</textarea>" );
+	return false;
+}
+/*
+if ( ! defined( 'BACKUPBUDDY_API_SALT' ) || ( 'CHANGEME' == BACKUPBUDDY_API_SALT ) || ( strlen( BACKUPBUDDY_API_SALT ) < 5 ) ) {
+	pb_backupbuddy::alert( "Make sure the following is in your wp-config.php file on this server:<br><textarea style='width: 100%;' disabled='disabled'>define( 'BACKUPBUDDY_API_SALT', 'CHANGEME' ); // !!! IMPORTANT !!! Change CHANGEME to the left to a unique password/phrase for generating API keys. 5+ characters.</textarea>" );
+	return false;
+}
+*/
+
+if ( '1' == pb_backupbuddy::_POST( 'regenerate_api_key' ) ) {
+	pb_backupbuddy::verify_nonce(); // Security check.
+	pb_backupbuddy::$options['api_key'] = backupbuddy_core::generate_api_key();
+	pb_backupbuddy::save();
+}
+?>
+
+<b>Note:</b> wp-config.php files as well as BackupBuddy settings will NOT be transferred in either direction. Your current BackupBuddy settings, destinations, API keys etc. will remain as they are on both sites.<br><br>
+
+<form method="post">
+	<?php pb_backupbuddy::nonce(); ?>
+	<input type="hidden" name="regenerate_api_key" value="1">
+	<button class="button secondary-button" onClick="jQuery('.backupbuddy_api_key-hide').toggle(); return false;">Show API Key</button><span class="backupbuddy_api_key-hide" style="display: none;">&nbsp;&nbsp;<input type="submit" name="submit" value="Generate New API Key" class="button button-primary"></span>
+	<br>
+	<br>
+	<div class="backupbuddy_api_key-hide" style="display: none;">
+		<b>Api Key:</b><br>
+		<textarea style="width: 100%; padding: 15px;" readonly="readonly" onClick="this.focus();this.select();"><?php echo pb_backupbuddy::$options['api_key']; ?></textarea>
+	</div>
+</form>
+
+<br><br>
+
+<?php
+/*
 pb_backupbuddy::$options['deployments'] = array(
 	array( 'siteurl' => 'http://backupbuddy2', 'api_key' => 'xxx' )
 );
@@ -12,9 +48,16 @@ pb_backupbuddy::save();
 if ( pb_backupbuddy::_GET( 'deployment' ) == '' ) {
 	foreach( pb_backupbuddy::$options['deployments'] as $deployment_id => $deployment ) {
 		echo '<a href="' . pb_backupbuddy::page_url() . '&deployment=' . $deployment_id . '">' . $deployment['siteurl'] . '</a>';
+		
+		echo '<pre>';
+		print_r( $deployment );
+		echo '</pre>';
 	}
 	return;
 }
+*/
+
+
 $deployment_id = pb_backupbuddy::_GET( 'deployment' );
 ?>
 

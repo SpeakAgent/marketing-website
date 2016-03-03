@@ -2,7 +2,12 @@
 // Any code in this file will be run upon plugin activation. NOTHING should be echo here or it will break activation.
 // TODO: Set up proper data structure migration based on the structure version. This is a temporary approach. Sorry.
 
+if ( ( ! isset( pb_backupbuddy::$options ) ) || empty( pb_backupbuddy::$options ) ) { // Make sure options are loaded if possible.
+	pb_backupbuddy::load();
+}
 
+
+require_once( pb_backupbuddy::plugin_path() . '/classes/core.php' );
 
 
 // ********** BEGIN 1.x -> 2.x DATA MIGRATION **********
@@ -93,7 +98,7 @@ if ( $upgrade_options != false ) {
 	
 	delete_option( 'ithemes-backupbuddy' );
 }
-
+unset( $upgrade_options );
 pb_backupbuddy::save();
 
 $old_log_file = WP_CONTENT_DIR . '/uploads/backupbuddy.txt';
@@ -176,6 +181,7 @@ foreach( pb_backupbuddy::$options['remote_destinations'] as $destination ) {
 if ( $needs_saving === true ) {
 	pb_backupbuddy::save();
 }
+unset( $needs_saving );
 // ********** END 3.0.43 -> 3.1 DATA MIGRATION **********
 
 
@@ -196,6 +202,7 @@ if ( pb_backupbuddy::$options['data_version'] < 5 ) {
 		pb_backupbuddy::anti_directory_browsing( backupbuddy_core::getLogDirectory() . 'fileoptions/' );
 		require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
 		foreach( pb_backupbuddy::$options['backups'] as $serial => $backup ) {
+			pb_backupbuddy::status( 'details', 'Fileoptions instance #31.' );
 			$backup_options = new pb_backupbuddy_fileoptions( backupbuddy_core::getLogDirectory() . 'fileoptions/' . $serial . '.txt', $read_only = false, $ignore_lock = false, $create_file = true );
 			$backup_options->options = $backup;
 			if ( true === $backup_options->save() ) {
@@ -292,6 +299,8 @@ if ( pb_backupbuddy::$options['data_version'] < 8 ) {
 }
 // ********** END 4.2 UPGRADE **********
 
+
+
 // ********** BEGIN 4.2.14.22 UPGRADE **********
 if ( isset( pb_backupbuddy::$options['rollback_beta'] ) ) {
 	unset( pb_backupbuddy::$options['rollback_beta'] );
@@ -300,6 +309,146 @@ if ( isset( pb_backupbuddy::$options['rollback_beta'] ) ) {
 // ********** END 4.2.14.22 UPGRADE **********
 
 
+
+// ********** BEGIN 6.4 UPGRADE -- migrates stash v1 to stash v2 type, disabling v1 destination **********
+if ( pb_backupbuddy::$options['data_version'] < 9 ) {
+	pb_backupbuddy::$options['data_version'] = '9';
+	pb_backupbuddy::save();
+	$phpmin_file = pb_backupbuddy::plugin_path() . '/destinations/stash2/_phpmin.php';
+	if ( ( count( pb_backupbuddy::$options['remote_destinations'] ) > 0 ) && file_exists( $phpmin_file ) ) { // only need to do this if we have destinations saved.
+		$php_minimum = file_get_contents( $phpmin_file );
+		if ( version_compare( PHP_VERSION, $php_minimum, '>=' ) ) { // Server's PHP is sufficient.
+			$nextDestKey = max( array_keys( pb_backupbuddy::$options['remote_destinations'] ) ) + 1;
+			
+			// Find existing Stash v1 destinations.
+			foreach( pb_backupbuddy::$options['remote_destinations'] as $destination_id => $v1_dest ) {
+				if ( 'stash' != $v1_dest['type'] ) {
+					continue;
+				}
+				
+				// Calculate new token.
+				require_once( pb_backupbuddy::plugin_path() . '/destinations/bootstrap.php' );
+				require_once( pb_backupbuddy::plugin_path() . '/destinations/stash2/init.php' );
+				require_once( pb_backupbuddy::plugin_path() . '/destinations/stash2/class.itx_helper2.php' );
+				global $wp_version;
+				
+				$itxapi_username = strtolower( $v1_dest['itxapi_username'] );
+				$password_hash = $v1_dest['itxapi_password'];
+				$access_token = ITXAPI_Helper2::get_access_token( $itxapi_username, $password_hash, site_url(), $wp_version );
+				
+				$settings = array(
+					'itxapi_username' => $itxapi_username,
+					'itxapi_password' => $access_token,
+				);
+				$response = pb_backupbuddy_destination_stash2::stashAPI( $settings, 'connect' );
+				
+				if ( is_array( $response ) ) { // Good so far.
+					if ( ! isset( $response['error'] ) ) { // No error.
+						if ( isset( $response['token'] ) ) {
+							$itxapi_token = $response['token'];
+						}
+					}
+				}
+				
+				if ( isset( $itxapi_token ) ) {
+					// Build new Stash2 destination over old v1 destination based on old settings.
+					$v2_dest = array(
+						'type'						=>		'stash2',
+						'title'						=>		$v1_dest['title'] . ' (v2)',
+						'itxapi_username'			=>		$itxapi_username,
+						'itxapi_token'				=>		$itxapi_token,
+						'ssl'						=>		$v1_dest['ssl'],
+						'db_archive_limit'			=>		$v1_dest['db_archive_limit'],
+						'full_archive_limit' 		=>		$v1_dest['full_archive_limit'],
+						'files_archive_limit' 		=>		$v1_dest['files_archive_limit'],
+						'manage_all_files'			=>		$v1_dest['manage_all_files'],
+						'use_packaged_cert'			=>		$v1_dest['use_packaged_cert'],
+						'disable_file_management'	=>		$v1_dest['disable_file_management'],
+						'disabled'					=>		$v1_dest['disabled'],
+					);
+					$v2_dest = array_merge( pb_backupbuddy_destination_stash2::$default_settings, $v2_dest ); // Merge over defaults.
+				}
+				
+				$v2_dest['disabled'] = '0';
+				if ( true === pb_backupbuddy_destination_stash2::test( $v2_dest ) ) {
+					$v2_dest['disabled'] = $v1_dest['disabled'];
+					pb_backupbuddy::$options['remote_destinations'][ $destination_id ] = $v2_dest; // New stash2 replacing stash1 settings.
+					$v1_dest['disabled'] = '1'; // Disable old Stash v1 destination at new index.
+					$v1_dest['title'] = $v1_dest['title'] . ' (v1)';
+					pb_backupbuddy::$options['remote_destinations'][ $nextDestKey ] = $v1_dest; // New location for old stash1 settings.
+					$nextDestKey++;
+				}
+			} // end foreach destination.
+		
+		} // Sufficient PHPversion.
+	}
+	pb_backupbuddy::save();
+}
+// ********** END 6.4 UPGRADE **********
+
+
+
+// ********** BEGIN 6.4.0.12 UPGRADE **********
+if ( pb_backupbuddy::$options['data_version'] < 11 ) {
+	pb_backupbuddy::$options['data_version'] = '11';
+	pb_backupbuddy::save();
+	
+	$crons = get_option('cron');
+	if ( is_array( $crons ) ) {
+		$removeCrons = array(
+			'pb_backupbuddy_corn',
+			'pb_backupbuddy_cron',
+		);
+		foreach( $removeCrons as $hook ) {
+			foreach( $crons as $timestamp => &$cron ) {
+				if ( isset( $cron[ $hook ] ) ) {
+					unset( $cron[ $hook ] );
+				}
+				if ( empty( $cron ) ) {
+					unset( $crons[ $timestamp ] );
+				}
+			}
+		}
+	}
+	update_option( 'cron', $crons );
+}
+// ********** END 6.4.0.12 UPGRADE **********
+
+
+
+// ********** BEGIN 6.4.0.13 UPGRADE **********
+require_once( pb_backupbuddy::plugin_path() . '/classes/housekeeping.php' );
+backupbuddy_housekeeping::remove_wp_schedules_with_no_bb_schedule(); // Handles upgrading schedule tags, housekeeping tag, and removal of faulty old tags.
+// ********** END 6.4.0.13 UPGRADE **********
+
+
+// ********** BEGIN 6.4.0.21 UPGRADE **********
+pb_backupbuddy::$options['data_version'] = '13';
+pb_backupbuddy::save();
+// ********** END 6.4.0.21 UPGRADE **********
+
+
+
+
+
+// ********** BEGIN 7.0 UPGRADE **********
+pb_backupbuddy::$options['data_version'] = '14';
+if ( ( '10' == pb_backupbuddy::$options['max_site_log_size'] ) || ( '5' == pb_backupbuddy::$options['max_site_log_size'] ) ) {
+	pb_backupbuddy::$options['max_site_log_size'] = '3'; // New default.
+}
+pb_backupbuddy::save();
+// ********** END 7.0 UPGRADE **********
+
+
+// ***** MISC BELOW *****
+
+
+
+// Remote any saved plaintext confirmation of importbuddy password.
+if ( isset( pb_backupbuddy::$options['importbuddy_pass_hash_confirm'] ) ) {
+	unset( pb_backupbuddy::$options['importbuddy_pass_hash_confirm'] );
+	pb_backupbuddy::save();
+}
 
 
 
@@ -326,12 +475,12 @@ if ( '0' === pb_backupbuddy::$options[ 'zip_method_strategy' ] ) {
 
 
 
+backupbuddy_core::verifyHousekeeping();
+backupbuddy_core::verifyLiveCron();
 
-// Schedule daily housekeeping.
-if ( false === wp_next_scheduled( pb_backupbuddy::cron_tag( 'housekeeping' ) ) ) { // if schedule does not exist...
-	backupbuddy_core::schedule_event( time() + ( 60*60 * 2 ), 'daily', pb_backupbuddy::cron_tag( 'housekeeping' ), array() ); // Add schedule.
-}
 
+// Attempt to actually test PHP max execution time. Forces on activation in case new server.
+backupbuddy_housekeeping::schedule_php_runtime_tests( $force_run = true );
 
 
 // Verify existance of default S3 config (currently blank to fix shell_exec() warning issue. Added 3.1.8.3 Jan 29, 2013 - Dustin.
@@ -346,8 +495,4 @@ if ( ! @file_exists( $s3_config ) ) {
 	}
 }
 unset( $s3_config );
-unset( $s3_config_status );
 
-
-
-?>

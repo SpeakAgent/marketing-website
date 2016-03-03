@@ -3,7 +3,7 @@ class Auth {
 	
 	const MAX_LOGIN_ATTEMPTS_ALLOWED = 4; // Maximum number of invalid login attempts before locking importbuddy.
 	const RESET_DEFAULTS_ON_INVALID_LOGIN = false; // Whether or not reset all settings/options back to defaults on login failure.
-	const COOKIE_EXPIRATION = 3600; // Number of seconds an importbuddy cookie is valid for.
+	const COOKIE_EXPIRATION = 86400; // Number of seconds an importbuddy cookie is valid for.
 	private static $_authenticated = false; // Whether user is validly authenticated or not.
 	private static $_checked = false; // Whether check() has been run yet.
 	
@@ -19,7 +19,7 @@ class Auth {
 	public static function check( $force_check = false ) {
 		
 		if ( ( true === self::$_checked ) && ( $force_check === false ) ) { // Skip checking if already skipped unless forcing.
-			return self::$_authenticated;
+			return self::is_authenticated();
 		}
 		
 		$login_attempt_file = ABSPATH . 'importbuddy/_login_attempts.php';
@@ -35,10 +35,12 @@ class Auth {
 		}
 		
 		$actual_pass_hash = PB_PASSWORD;
-		if ( ( '#PASSWORD#' == $actual_pass_hash ) || ( '' == $actual_pass_hash ) ) { die( 'Error #84578459745. A password must be set.' ); }
+		if ( ( '#PASSWORD#' == $actual_pass_hash ) || ( '' == $actual_pass_hash ) ) { die( 'Error #84578459745. A password must be set to access ImportBuddy. Please download a fresh copy after configuring your ImportBuddy password.' ); }
 		
 		if ( pb_backupbuddy::_POST( 'password' ) != '' ) {
 			$supplied_pass_hash = md5( pb_backupbuddy::_POST( 'password' ) );
+		} elseif ( pb_backupbuddy::_GET( 'password' ) != '' ) {
+			$supplied_pass_hash = md5( pb_backupbuddy::_GET( 'password' ) );
 		} else {
 			if ( pb_backupbuddy::_GET( 'v' ) != '' ) { // Hash submitted by magic migration.
 				$supplied_pass_hash = pb_backupbuddy::_GET( 'v' );
@@ -101,6 +103,11 @@ class Auth {
 	 *
 	 */
 	public static function require_authentication() {
+		
+		// Check if previously authed already this session.
+		if ( true === self::is_authenticated() ) {
+			return true;
+		}
 		
 		self::check();
 		if ( true === self::is_authenticated() ) {

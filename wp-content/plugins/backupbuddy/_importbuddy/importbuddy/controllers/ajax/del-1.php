@@ -89,7 +89,7 @@ function get_archives_list() {
 	
 	// List backup files in this directory.
 	$backup_archives = array();
-	$backup_archives_glob = glob( ABSPATH . 'backup*.zip' );
+	$backup_archives_glob = glob( '{' . ABSPATH . 'backup*.zip,' . ABSPATH . 'snapshot*.zip}' , GLOB_BRACE );
 	if ( !is_array( $backup_archives_glob ) || empty( $backup_archives_glob ) ) { // On failure glob() returns false or an empty array depending on server settings so normalize here.
 		$backup_archives_glob = array();
 	}

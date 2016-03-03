@@ -5,8 +5,9 @@
 class pb_backupbuddy_destination_local { // Change class name end to match destination name.
 	
 	public static $destination_info = array(
-		'name'			=>		'Local Directory',
+		'name'			=>		'Local Directory Copy',
 		'description'	=>		'Send files to another directory on this server / hosting account. This is useful for storing copies locally in another location. This is also a possible destination for automated migrations.',
+		'category'		=>		'normal', // best, normal, legacy
 	);
 	
 	// Default settings. Should be public static for auto-merging.
@@ -19,6 +20,7 @@ class pb_backupbuddy_destination_local { // Change class name end to match desti
 		'temporary'		=>		false,
 		'archive_limit'	=>		'0',
 		'disable_file_management'	=>		'0',		// When 1, _manage.php will not load which renders remote file management DISABLED.
+		'disabled'					=>		'0',		// When 1, disable this destination.
 	);
 	
 	
@@ -31,6 +33,14 @@ class pb_backupbuddy_destination_local { // Change class name end to match desti
 	 *	@return		boolean						True on success, else false.
 	 */
 	public static function send( $settings = array(), $files = array(), $send_id = '' ) {
+		global $pb_backupbuddy_destination_errors;
+		if ( '1' == $settings['disabled'] ) {
+			$pb_backupbuddy_destination_errors[] = __( 'Error #48933: This destination is currently disabled. Enable it under this destination\'s Advanced Settings.', 'it-l10n-backupbuddy' );
+			return false;
+		}
+		if ( ! is_array( $files ) ) {
+			$files = array( $files );
+		}
 		
 		$limit = $settings['archive_limit'];
 		$path = $settings['path'];
@@ -113,6 +123,7 @@ class pb_backupbuddy_destination_local { // Change class name end to match desti
 		// Load fileoptions to the send.
 		pb_backupbuddy::status( 'details', 'About to load fileoptions data.' );
 		require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
+		pb_backupbuddy::status( 'details', 'Fileoptions instance #11.' );
 		$fileoptions_obj = new pb_backupbuddy_fileoptions( backupbuddy_core::getLogDirectory() . 'fileoptions/send-' . $send_id . '.txt', $read_only = false, $ignore_lock = false, $create_file = false );
 		if ( true !== ( $result = $fileoptions_obj->is_ok() ) ) {
 			pb_backupbuddy::status( 'error', __('Fatal Error #9034.2344848. Unable to access fileoptions data.', 'it-l10n-backupbuddy' ) . ' Error: ' . $result );

@@ -1,5 +1,7 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
+
 pb_backupbuddy::$ui->ajax_header();
 
 
@@ -12,7 +14,7 @@ if ( isset( pb_backupbuddy::$options['remote_destinations'][ pb_backupbuddy::_GE
 
 
 require_once( pb_backupbuddy::plugin_path() . '/destinations/bootstrap.php' );
-pb_backupbuddy_destinations::manage( $destination );
+pb_backupbuddy_destinations::manage( $destination, $_GET['destination_id'] );
 
 /*
 echo '<br><br><br>';

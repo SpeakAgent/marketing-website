@@ -4,8 +4,9 @@ use \Dropbox as dbx;
 class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 	
 	public static $destination_info = array(
-		'name'			=>		'Dropbox v2 <small>(new)</small>',
+		'name'			=>		'Dropbox (v2)',
 		'description'	=>		'Dropbox.com support for servers running PHP v5.3 or newer. Supports multipart chunked uploads for larger file support, improved memory handling, and reliability.',
+		'category'		=>		'normal', // best, normal, legacy
 	);
 	
 	// Default settings. Should be public static for auto-merging.
@@ -16,7 +17,7 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 		'access_token'				=>		'',						// oAuth2 access token.
 		'directory'					=>		'backupbuddy',			// Remote Dropbox directory to store into.
 		'archive_limit'				=>		0,						// Max number of archives allowed in destination directory.
-		'max_chunk_size'			=>		'0',					// Maximum chunk size in MB. Anything larger will be chunked up into pieces this size (or less for last piece). This allows larger files to be sent than would otherwise be possible. Minimum of 5mb allowed by S3.
+		'max_chunk_size'			=>		'80',					// Maximum chunk size in MB. Anything larger will be chunked up into pieces this size (or less for last piece). This allows larger files to be sent than would otherwise be possible. Minimum of 5mb allowed by S3.
 		'disable_file_management'	=>		'0',		// When 1, _manage.php will not load which renders remote file management DISABLED.
 		// Instance variables for transfer-specific settings such as multipart/chunking.
 		'_chunk_upload_id'			=>		'',						// Instance var. Internal use only for continuing a chunked upload.
@@ -26,6 +27,7 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 		'_chunk_sent_count'			=>		0,						// Instance var. Internal use only for continuing a chunked upload. - Number of chunks sent.
 		'_chunk_total_count'		=>		0,						// Instance var. Internal use only for continuing a chunked upload. - Total number of chunks that will be sent..
 		'_chunk_transfer_speeds'	=>		array(),				// Instance var. Internal use only for continuing a chunked upload. - Array of time spent actually transferring. Used for calculating send speeds and such.
+		'disabled'					=>		'0',		// When 1, disable this destination.
 	);
 	
 	public static $appInfo;
@@ -86,10 +88,18 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 	 *	
 	 *	Send one or more files.
 	 *	
-	 *	@param		array			$files		Array of one or more files to send.
+	 *	@param		array			$file		Array of one or more files to send.
 	 *	@return		boolean						True on success single-process, array on multipart with remaining steps, else false (failed).
 	 */
-	public static function send( $settings = array(), $files = array(), $send_id = '' ) {
+	public static function send( $settings = array(), $file, $send_id = '', $delete_after = false ) {
+		global $pb_backupbuddy_destination_errors;
+		if ( '1' == $settings['disabled'] ) {
+			$pb_backupbuddy_destination_errors[] = __( 'Error #48933: This destination is currently disabled. Enable it under this destination\'s Advanced Settings.', 'it-l10n-backupbuddy' );
+			return false;
+		}
+		if ( is_array( $file ) ) {
+			$file = $file[0];
+		}
 		
 		pb_backupbuddy::status( 'details', 'Dropbox2 send function started. Remote send id: `' . $send_id . '`.' );
 		
@@ -131,10 +141,8 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 			
 			// Read this file chunk into memory.
 			pb_backupbuddy::status( 'details', 'Reading chunk into memory.' );
-			try {
-				$data = self::readFully( $f, $settings['_chunk_maxsize'] );
-			} catch ( \Exception $e ) {
-				pb_backupbuddy::status( 'error', 'Dropbox Error #484938376: ' . $e->getMessage() );
+			if ( false === ( $data = fread( $f, $settings['_chunk_maxsize'] ) ) ) {
+				pb_backupbuddy::status( 'error', 'Dropbox Error #484938376: Unable to read in chunk.' );
 				return false;
 			}
 			
@@ -151,7 +159,7 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 			if ( true === $result ) { // Upload success.
 				pb_backupbuddy::status( 'details', 'Chunk upload continuation success with valid offset.' );
 			} elseif ( false === $result ) { // Failed.
-				pb_backupbuddy::status( 'error', 'Chunk upload continuation failed.' );
+				pb_backupbuddy::status( 'error', 'Chunk upload continuation failed at offset `' . $settings['_chunk_next_offset'] . '`.' );
 				return false;
 			} elseif ( is_numeric( $result ) ) { // offset wrong. Update to use this.
 				pb_backupbuddy::status( 'details', 'Chunk upload continuation received an updated offset response of `' . $result . '` when we tried `' . $settings['_chunk_next_offset'] . '`.' );
@@ -184,6 +192,7 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 			// Load destination fileoptions.
 			pb_backupbuddy::status( 'details', 'About to load fileoptions data.' );
 			require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
+			pb_backupbuddy::status( 'details', 'Fileoptions instance #15.' );
 			$fileoptions_obj = new pb_backupbuddy_fileoptions( backupbuddy_core::getLogDirectory() . 'fileoptions/send-' . $send_id . '.txt', $read_only = false, $ignore_lock = false, $create_file = false );
 			if ( true !== ( $result = $fileoptions_obj->is_ok() ) ) {
 				pb_backupbuddy::status( 'error', __('Fatal Error #9034.84838. Unable to access fileoptions data.', 'it-l10n-backupbuddy' ) . ' Error: ' . $result );
@@ -205,14 +214,15 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 					return false;
 				}
 				pb_backupbuddy::status( 'details', 'Chunked upload finish results: `' . print_r( $result, true ) . '`.' );
-				if ( filesize( $settings['_chunk_file'] ) != $result['bytes'] ) {
-					pb_backupbuddy::status( 'error', 'Error #8958944. Dropbox reported file size differs from local size. The file upload may have been corrupted.' );
+				$localSize = filesize( $settings['_chunk_file'] );
+				if ( $localSize != $result['bytes'] ) {
+					pb_backupbuddy::status( 'error', 'Error #8958944. Dropbox reported file size differs from local size. The file upload may have been corrupted. Local size: `' . $localSize . '`. Remote size: `' . $result['bytes'] . '`.' );
 					return false;
 				}
 				
 				$fileoptions['write_speed'] = array_sum( $chunked_destination_settings['_chunk_transfer_speeds'] ) / $chunked_destination_settings['_chunk_sent_count'];
 				$fileoptions['_multipart_status'] = 'Sent part ' . $chunked_destination_settings['_chunk_sent_count'] . ' of ' . $chunked_destination_settings['_chunk_total_count'] . '.';
-				$fileoptions['finish_time'] = time();
+				$fileoptions['finish_time'] = microtime(true);
 				$fileoptions['status'] = 'success';
 				$fileoptions_obj->save();
 				unset( $fileoptions_obj );
@@ -224,34 +234,35 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 			
 			
 			// Schedule to continue if anything is left to upload for this multipart of any individual files.
-			if ( ( $chunked_destination_settings['_chunk_upload_id'] != '' ) || ( count( $files ) > 0 ) ) {
+			if ( $chunked_destination_settings['_chunk_upload_id'] != '' ) {
 				pb_backupbuddy::status( 'details', 'Dropbox multipart upload has more parts left. Scheduling next part send.' );
 				
 				$cronTime = time();
-				$cronArgs = array( $chunked_destination_settings, $files, $send_id, false );
+				$cronArgs = array( $chunked_destination_settings, $file, $send_id, $delete_after );
 				$cronHashID = md5( $cronTime . serialize( $cronArgs ) );
 				$cronArgs[] = $cronHashID;
 				
-				$schedule_result = backupbuddy_core::schedule_single_event( $cronTime, pb_backupbuddy::cron_tag( 'destination_send' ), $cronTags );
+				$schedule_result = backupbuddy_core::schedule_single_event( $cronTime, 'destination_send', $cronArgs );
 				if ( true === $schedule_result ) {
 					pb_backupbuddy::status( 'details', 'Next Dropbox chunk step cron event scheduled.' );
 				} else {
-					pb_backupbuddy::status( 'error', 'Next Dropbox chunk step cron even FAILED to be scheduled.' );
+					pb_backupbuddy::status( 'error', 'Next Dropbox chunk step cron event FAILED to be scheduled.' );
 				}
-				spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
-				update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+				
+				if ( '1' != pb_backupbuddy::$options['skip_spawn_cron_call'] ) {
+					update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+					spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
+				}
 				
 				return array( $chunked_destination_settings['_chunk_upload_id'], 'Sent ' . $chunked_destination_settings['_chunk_sent_count'] . ' of ' . $chunked_destination_settings['_chunk_total_count'] . ' parts.' );
 			}
 			
-		} // end continue multipart chunked upload.
-		
-		
-		/***** END MULTIPART CHUNKED CONTINUE *****/
-		
-		
-		pb_backupbuddy::status( 'details', 'Looping through files to send to Dropbox.' );
-		foreach( $files as $file_id => $file ) {
+		} else { // Not continuing chunk send.
+			
+			
+			/***** END MULTIPART CHUNKED CONTINUE *****/
+			
+			
 			$file_size = filesize( $file );
 			
 			pb_backupbuddy::status( 'details', 'Opening file `' . basename( $file ) . '` to send.' );
@@ -267,16 +278,15 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 				
 				// Read first file chunk into memory.
 				pb_backupbuddy::status( 'details', 'Reading first chunk into memory.' );
-				try {
-					$data = self::readFully( $f, $max_chunk_size_bytes );
-				} catch ( \Exception $e ) {
-					pb_backupbuddy::status( 'error', 'Dropbox Error #5684574373: ' . $e->getMessage() );
+				if ( false === ( $data = fread( $f, $max_chunk_size_bytes ) ) ) {
+					pb_backupbuddy::status( 'error', 'Dropbox Error #328663: Unable to read in chunk.' );
 					return false;
 				}
 				
 				// Start chunk upload to get upload ID. Sends first chunk piece.
 				$send_time = -(microtime( true ));
 				pb_backupbuddy::status( 'details',  'About to start chunked upload & put first chunk of file `' . basename( $file ) . '` to Dropbox (PHP 5.3+).' );
+				
 				try {
 					$result = self::$_dbxClient->chunkedUploadStart( $data );
 				} catch ( \Exception $e ) {
@@ -304,20 +314,26 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 				$chunked_destination_settings['_chunk_transfer_speeds'][] = $chunk_transfer_speed;
 				pb_backupbuddy::status( 'details', 'Sent first chunk to Dropbox with upload ID: `' . $chunked_destination_settings['_chunk_upload_id'] . '`. Offset: `' . $chunked_destination_settings['_chunk_offset'] . '`.' );
 				
-				// Remove this file from list to send before passing $files to schedule next cron. Multipart will handle this from here on out.
-				unset( $files[$file_id] );
-				
 				// Schedule next chunk to send.
 				pb_backupbuddy::status( 'details', 'Dropbox (PHP 5.3+) scheduling send of next part(s).' );
 				
 				$cronTime = time();
-				$cronArgs = array( $chunked_destination_settings, $files, $send_id, false );
+				$cronArgs = array( $chunked_destination_settings, $file, $send_id, $delete_after );
 				$cronHashID = md5( $cronTime . serialize( $cronArgs ) );
 				$cronArgs[] = $cronHashID;
 				
-				backupbuddy_core::schedule_single_event( $cronTime, pb_backupbuddy::cron_tag( 'destination_send' ), $cronArgs );
-				spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
-				update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+				if ( false === backupbuddy_core::schedule_single_event( $cronTime, 'destination_send', $cronArgs ) ) {
+					pb_backupbuddy::status( 'error', 'Error #948844: Unable to schedule next Dropbox2 cron chunk.' );
+					return false;
+				} else {
+					pb_backupbuddy::status( 'details', 'Success scheduling next cron chunk.' );
+				}
+				
+				if ( '1' != pb_backupbuddy::$options['skip_spawn_cron_call'] ) {
+					update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+					spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
+				}
+				
 				pb_backupbuddy::status( 'details', 'Dropbox (PHP 5.3+) scheduled send of next part(s). Done for this cycle.' );
 				
 				return array( $chunked_destination_settings['_chunk_upload_id'], 'Sent 1 of ' . $chunked_destination_settings['_chunk_total_count'] . ' parts.' );
@@ -339,6 +355,7 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 				
 				pb_backupbuddy::status( 'details', 'About to load fileoptions data.' );
 				require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
+				pb_backupbuddy::status( 'details', 'Fileoptions instance #14.' );
 				$fileoptions_obj = new pb_backupbuddy_fileoptions( backupbuddy_core::getLogDirectory() . 'fileoptions/send-' . $send_id . '.txt', $read_only = false, $ignore_lock = false, $create_file = false );
 				if ( true !== ( $result = $fileoptions_obj->is_ok() ) ) {
 					pb_backupbuddy::status( 'error', __('Fatal Error #9034.2344848. Unable to access fileoptions data.', 'it-l10n-backupbuddy' ) . ' Error: ' . $result );
@@ -356,58 +373,59 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 				unset( $fileoptions_obj );
 				
 			} // end normal (non-chunked) send.
+		} // End non-continuation send.
+		
+		pb_backupbuddy::status( 'message', 'Success sending `' . basename( $file ) . '` to Dropbox!' );
+		
+		
+		// Start remote backup limit
+		if ( $settings['archive_limit'] > 0 ) {
+			pb_backupbuddy::status( 'details',  'Dropbox file limit in place. Proceeding with enforcement.' );
 			
-			pb_backupbuddy::status( 'message', 'Success sending `' . basename( $file ) . '` to Dropbox!' );
+			$meta_data = self::$_dbxClient->getMetadataWithChildren( $settings['directory'] );
 			
+			// Create array of backups and organize by date
+			$bkupprefix = backupbuddy_core::backup_prefix();
 			
-			// Start remote backup limit
-			if ( $settings['archive_limit'] > 0 ) {
-				pb_backupbuddy::status( 'details',  'Dropbox file limit in place. Proceeding with enforcement.' );
+			$backups = array();
+			foreach ( (array) $meta_data['contents'] as $looping_file ) {
 				
-				$meta_data = self::$_dbxClient->getMetadataWithChildren( $settings['directory'] );
-				
-				// Create array of backups and organize by date
-				$bkupprefix = backupbuddy_core::backup_prefix();
-				
-				$backups = array();
-				foreach ( (array) $meta_data['contents'] as $looping_file ) {
-					
-					if ( $looping_file['is_dir'] == '1' ) { // JUST IN CASE. IGNORE anything that is a directory.
-						continue;
-					}
-					
-					// check if file is backup
-					if ( ( strpos( $looping_file['path'], 'backup-' . $bkupprefix . '-' ) !== false ) ) { // Appears to be a backup file.
-						$backups[$looping_file['path']] = strtotime( $looping_file['modified'] );
-					}
+				if ( $looping_file['is_dir'] == '1' ) { // JUST IN CASE. IGNORE anything that is a directory.
+					continue;
 				}
-				arsort($backups);
 				
-				if ( ( count( $backups ) ) > $settings['archive_limit'] ) {
-					pb_backupbuddy::status( 'details',  'Dropbox backup file count of `' . count( $backups ) . '` exceeds limit of `' . $settings['archive_limit'] . '`.' );
-					$i = 0;
-					$delete_fail_count = 0;
-					foreach( $backups as $buname => $butime ) {
-						$i++;
-						if ( $i > $settings['archive_limit'] ) {
-							if ( ! self::$_dbxClient->delete( $buname ) ) { // Try to delete backup on Dropbox. Increment failure count if unable to.
-								pb_backupbuddy::status( 'details',  'Unable to delete excess Dropbox file: `' . $buname . '`' );
-								$delete_fail_count++;
-							} else {
-								pb_backupbuddy::status( 'details',  'Deleted excess Dropbox file: `' . $buname . '`' );
-							}
+				// check if file is backup
+				if ( ( strpos( $looping_file['path'], 'backup-' . $bkupprefix . '-' ) !== false ) ) { // Appears to be a backup file.
+					$backups[$looping_file['path']] = strtotime( $looping_file['modified'] );
+				}
+			}
+			arsort($backups);
+			
+			if ( ( count( $backups ) ) > $settings['archive_limit'] ) {
+				pb_backupbuddy::status( 'details',  'Dropbox backup file count of `' . count( $backups ) . '` exceeds limit of `' . $settings['archive_limit'] . '`.' );
+				$i = 0;
+				$delete_fail_count = 0;
+				foreach( $backups as $buname => $butime ) {
+					$i++;
+					if ( $i > $settings['archive_limit'] ) {
+						if ( ! self::$_dbxClient->delete( $buname ) ) { // Try to delete backup on Dropbox. Increment failure count if unable to.
+							pb_backupbuddy::status( 'details',  'Unable to delete excess Dropbox file: `' . $buname . '`' );
+							$delete_fail_count++;
+						} else {
+							pb_backupbuddy::status( 'details',  'Deleted excess Dropbox file: `' . $buname . '`' );
 						}
 					}
-					
-					if ( $delete_fail_count !== 0 ) {
-						backupbuddy_core::mail_error( sprintf( __('Dropbox remote limit could not delete %s backups.', 'it-l10n-backupbuddy' ), $delete_fail_count) );
-					}
 				}
-			} else {
-				pb_backupbuddy::status( 'details',  'No Dropbox file limit to enforce.' );
+				
+				if ( $delete_fail_count !== 0 ) {
+					backupbuddy_core::mail_error( sprintf( __('Dropbox remote limit could not delete %s backups.', 'it-l10n-backupbuddy' ), $delete_fail_count) );
+				}
 			}
-			// End remote backup limit
-		} // end foreach.
+		} else {
+			pb_backupbuddy::status( 'details',  'No Dropbox file limit to enforce.' );
+		}
+		// End remote backup limit
+		
 		pb_backupbuddy::status( 'details', 'All files sent.' );
 		
 		return true; // Success if made it this far.
@@ -425,7 +443,7 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 	 *	@param		array			$settings	Destination settings.
 	 *	@return		bool|string					True on success, string error message on failure.
 	 */
-	public static function test( $settings, $files = array() ) {
+	public static function test( $settings, $file ) {
 		
 		return false; // WE DO NOT HAVE A REMOTE TEST FOR THIS CURRENTLY.
 		
@@ -566,31 +584,6 @@ class pb_backupbuddy_destination_dropbox2 { // Ends with destination slug.
 		
 	} // End delete().
 	
-	
-	
-	/**
-	 * @link FROM DROPBOX LIB.
-     * Sometimes fread() returns less than the request number of bytes (for example, when reading
-     * from network streams).  This function repeatedly calls fread until the requested number of
-     * bytes have been read or we've reached EOF.
-     *
-     * @param resource $inStream
-     * @param int $limit
-     * @return string
-     */
-    private static function readFully($inStream, $numBytes)
-    {
-
-        $full = '';
-        $bytesRemaining = $numBytes;
-        while (!feof($inStream) && $bytesRemaining > 0) {
-            $part = fread($inStream, $bytesRemaining);
-            if ($part === false) throw new StreamReadException("Error reading from \$inStream.");
-            $full .= $part;
-            $bytesRemaining -= strlen($part);
-        }
-        return $full;
-    }
 	
 	
 } // End class.

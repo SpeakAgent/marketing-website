@@ -146,7 +146,7 @@ function rollback_loadRestoreEvents() {
 		backupbuddy_showSuggestions( suggestions );
 	
 		setTimeout(function(){
-			backupbuddy_log( '* The backup has halted.' );
+			backupbuddy_log( '--- The backup has halted.' );
 		},500);
 		alert( 'The backup has halted.' );
 		//},1000);

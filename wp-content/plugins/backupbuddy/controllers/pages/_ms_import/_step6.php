@@ -39,6 +39,7 @@ $this->import_options['siteurl'] = $destination_url;
 
 global $wpdb;
 // Clean out some spam. TODO: any particular reason why this is done?
+pb_backupbuddy::status( 'details', 'Deleting spam.' );
 $wpdb->query( $wpdb->prepare( "DELETE from {$new_db_prefix}_comments WHERE comment_approved = %s", 'spam' ) );
 
 
@@ -55,6 +56,7 @@ if ( isset( pb_backupbuddy::$options['path'] ) ) { $destination_path = pb_backup
 if ( isset( $this->advanced_options['skip_database_migration'] ) && ( $this->advanced_options['skip_database_migration'] == 'true' ) ) {
 	$this->status( 'message', 'Skipping database migration based on advanced settings.' );
 } else {
+	pb_backupbuddy::status( 'details', 'Loading database migration.' );
 	pb_backupbuddy::$options['dat_file'] = $this->_backupdata;
 	require_once( pb_backupbuddy::plugin_path() . '/classes/_migrate_database.php' );
 }

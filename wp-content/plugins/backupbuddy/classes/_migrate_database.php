@@ -5,9 +5,8 @@
  *	Handles all SQL data migration for both importbuddy and multisite importing.
  *	Handles updating paths, URLs, etc.
  *	
- *	Version: 1.0.1
- *	Author: Dustin Bolton
- *	Author URI: http://dustinbolton.com/
+ *	@since 1.0.1
+ *	@author Dustin Bolton
  *
  *	REQUIREMENTS:
  *
@@ -22,11 +21,13 @@
  *	1) ImportBuddy
  *	2) Multisite Import / Restore
  *
+ *	NOTES:
+ *
+ *	- Example instantiation: $migrate = new backupbuddy_migrateDB( 'standalone', $this->_state );
+ *	- dbreplace class intelligently ignores replacing values with identical values for performance.
+ *
  */
 
-// NOTES:
-//		* Example instantiation: $migrate = new backupbuddy_migrateDB( 'standalone', $this->_state );
-//		* dbreplace class intelligently ignores replacing values with identical values for performance.
 
 
 global $wpdb;
@@ -36,10 +37,8 @@ if ( isset( $destination_type ) && ( $destination_type == 'multisite_import' ) )
 	$state = array(
 		'dat' => pb_backupbuddy::$options['dat_file'],
 		'maxExecutionTime' => 30,
-		'destination_type' => $this->destinationType,
-		'destination_siteurl' => $destination_siteurl,
-		'destination_homeurl' => $destination_home,
-		'destination_prefix' => $multisite_network_db_prefix,
+		'siteurl' => $destination_siteurl,
+		'homeurl' => $destination_home,
 		'upload_url' => $this->restoreData['upload_url'], // MS related stuff.
 		'databaseSettings' => array(
 									'prefix' => $multisite_network_db_prefix,
@@ -47,8 +46,7 @@ if ( isset( $destination_type ) && ( $destination_type == 'multisite_import' ) )
 								)
 	);
 	
-	$migrate = new backupbuddy_migrateDB( $this->destinationType, $state, $multisite_network_db_prefix );
-	
+	$migrate = new backupbuddy_migrateDB( $destination_type, $state, $multisite_network_db_prefix );
 }
 
 
@@ -63,6 +61,8 @@ class backupbuddy_migrateDB {
 	var $sourceType;
 	var $destinationType;
 	var $networkPrefix;
+	var $overridePrefix; // Prefix to use. Defaults to $this->restoreData['databaseSettings']['prefix']. Allows overriding.
+	var $finalPrefix; // Final prefix to use. If not overriding then ths will be the same as the $overridePrefix.
 
 	var $oldURLs;
 	var $newURLs;
@@ -76,19 +76,30 @@ class backupbuddy_migrateDB {
 	
 	// DESTINATION TYPE. Valid values: standalone, multisite_import, multisite_network
 	// RETURNS: true on success fully completing, array( resumeFunction, resumePoint ) on needing chunking. false on failure.
-	function __construct( $destinationType, $restoreData, $networkPrefix = '' ) {
+	function __construct( $destinationType, $restoreData, $networkPrefix = '', $overridePrefix = '' ) {
 
 		$this->startTime = microtime( true ); // Start tracking for elapsed time.
 		
 		$this->destinationType = $destinationType;
 		$this->restoreData = &$restoreData;
+		
+		if ( '' == $overridePrefix ) { // Not overriding prefix.
+			$this->overridePrefix = $this->restoreData['databaseSettings']['prefix'];
+			$this->finalPrefix = $this->restoreData['databaseSettings']['prefix'];
+			pb_backupbuddy::status( 'details', 'Using normal mode database prefix based on settings: `' . $this->overridePrefix . '`.' );
+		} else { // Overriding prefix.
+			$this->overridePrefix = $overridePrefix;
+			$this->finalPrefix = $this->restoreData['databaseSettings']['prefix'];
+			pb_backupbuddy::status( 'details', 'Using override database prefix: `' . $this->overridePrefix . '`. Final prefix: `' . $this->finalPrefix . '`.' );
+		}
+		
 		$this->networkPrefix = $networkPrefix; 
 		if ( '' == $networkPrefix ) {
-			$this->networkPrefix = $this->restoreData['databaseSettings']['prefix'];
+			$this->networkPrefix = $this->overridePrefix;
 		}
 
 		pb_backupbuddy::status( 'message', 'Migrating database content...' );
-		pb_backupbuddy::status( 'details', 'Destination site table prefix: ' . $this->restoreData['databaseSettings']['prefix'] );
+		pb_backupbuddy::status( 'details', 'Destination site table prefix: ' . $this->overridePrefix );
 
 		if ( '' == $this->restoreData['homeurl'] ) { // If no home then we set it equal to site URL.
 			$settings['homeurl'] = $this->restoreData['siteurl'];
@@ -104,7 +115,7 @@ class backupbuddy_migrateDB {
 			$this->sourceType = 'standalone';
 		}
 		
-		pb_backupbuddy::status( 'details', 'Migration type: ' . $this->sourceType . ' to ' . $this->destinationType );
+		pb_backupbuddy::status( 'details', 'Migration type: `' . $this->sourceType . '` to `' . $this->destinationType . '`.' );
 		pb_backupbuddy::status( 'details', 'Destination Site URL: ' . $this->restoreData['siteurl'] );
 		pb_backupbuddy::status( 'details', 'Destination Home URL: ' . $this->restoreData['homeurl'] );
 		
@@ -171,7 +182,7 @@ class backupbuddy_migrateDB {
 		} // end foreach.
 		
 		
-		
+		$this->disconnectLive();
 		
 		
 		pb_backupbuddy::status( 'message', 'Took ' . round( microtime( true ) - pb_backupbuddy::$start_time, 3 ) . ' seconds. Done.' );
@@ -179,6 +190,58 @@ class backupbuddy_migrateDB {
 		
 		return true;
 	} // End function __construct().
+	
+	
+	
+	/* disconnectLive()
+	 *
+	 * Disconnects any Stash Live destination.
+	 *
+	 */
+	function disconnectLive() {
+		pb_backupbuddy::status( 'details', 'Checking for any Stash Live destinations needing disconnected.' );
+		global $wpdb;
+		
+		// Get BackupBuddy options.
+		$finalPrefix = backupbuddy_core::dbEscape( $this->finalPrefix );
+		$result = $wpdb->get_var( "SELECT option_value FROM `{$finalPrefix}options` WHERE option_name='pb_backupbuddy' LIMIT 1" );
+		if ( $result === false ) {
+			pb_backupbuddy::status( 'error', 'Unable to retrieve pb_backupbuddy options from database. Skipping disconnectLive().' );
+			return;
+		}
+		
+		// Unserialize.
+		if ( false === ( $result = @unserialize( $result ) ) ) {
+			pb_backupbuddy::status( 'details', 'Could not unserialize retrieved options data. Skipping disconnectLive().' );
+			return; // Could not unserialize.
+		}
+		
+		// Check that remote options exists and is valid.
+		if ( ( ! isset( $result['remote_destinations'] ) ) || ( ! is_array( $result['remote_destinations'] ) ) ) { 
+			pb_backupbuddy::status( 'details', 'Remote destinations not found or not array. Skipping disconnectLive().' );
+			return;
+		}
+		
+		// Look for a Live destination & delete it.
+		foreach( $result['remote_destinations'] as $i => $remote_destination ) {
+			if ( 'live' == $remote_destination['type'] ) {
+				pb_backupbuddy::status( 'details', 'Found Stash Live destination. Removing.' );
+				unset( $result['remote_destinations'][ $i ] );
+			}
+		}
+		
+		// Re-serialize.
+		$result = serialize( $result );
+		
+		// Save options back.
+		$wpdb->query( "UPDATE `{$finalPrefix}options` SET option_value='" . backupbuddy_core::dbEscape( $result ) . "' WHERE option_name='pb_backupbuddy' LIMIT 1" );
+		pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating pb_backupbuddy in options table.' );
+		if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
+		
+		pb_backupbuddy::status( 'details', 'Done checking for any Stash Live destinations needing disconnected.' );
+	} // End disconnectLive().
+	
+	
 	
 	function nearTimeLimit() {
 		// If we are within 1 second of reaching maximum PHP runtime then stop here so that it can be picked up in another PHP process...
@@ -189,6 +252,8 @@ class backupbuddy_migrateDB {
 			return false;
 		}
 	}
+	
+	
 	
 	function _calculateNewOldURLs() {
 		// ********** BEGIN MAKING OLD URLS UNIQUE AND TRIMMING CORRESPONDING NEW URLS **********
@@ -211,6 +276,8 @@ class backupbuddy_migrateDB {
 
 		// ********** END MAKING OLD URLS UNIQUE AND TRIMMING CORRESPONDING NEW URLS **********
 	}
+	
+	
 	
 	function migrateCommon() {
 		pb_backupbuddy::status( 'details', 'Starting migration steps for `all` sites.' );
@@ -272,17 +339,17 @@ class backupbuddy_migrateDB {
 		
 		
 		$this->bruteforceExcludedTables = array(
-			$this->restoreData['databaseSettings']['prefix'] . 'posts',
-			$this->restoreData['databaseSettings']['prefix'] . 'users', // Imported users table will temporarily be here so this is fine for MS imports.
-			$this->restoreData['databaseSettings']['prefix'] . 'usermeta', // Imported users table will temporarily be here so this is fine for MS imports.
-			$this->restoreData['databaseSettings']['prefix'] . 'terms',
-			$this->restoreData['databaseSettings']['prefix'] . 'term_taxonomy',
-			$this->restoreData['databaseSettings']['prefix'] . 'term_relationships',
-			$this->restoreData['databaseSettings']['prefix'] . 'postmeta',
-			$this->restoreData['databaseSettings']['prefix'] . 'options',
-			$this->restoreData['databaseSettings']['prefix'] . 'comments',
-			$this->restoreData['databaseSettings']['prefix'] . 'commentmeta',
-			$this->restoreData['databaseSettings']['prefix'] . 'links',
+			$this->overridePrefix . 'posts',
+			$this->overridePrefix . 'users', // Imported users table will temporarily be here so this is fine for MS imports.
+			$this->overridePrefix . 'usermeta', // Imported users table will temporarily be here so this is fine for MS imports.
+			$this->overridePrefix . 'terms',
+			$this->overridePrefix . 'term_taxonomy',
+			$this->overridePrefix . 'term_relationships',
+			$this->overridePrefix . 'postmeta',
+			$this->overridePrefix . 'options',
+			$this->overridePrefix . 'comments',
+			$this->overridePrefix . 'commentmeta',
+			$this->overridePrefix . 'links',
 		);
 
 		pb_backupbuddy::status( 'details', 'Finished migration steps for `all` sites.' );
@@ -293,58 +360,60 @@ class backupbuddy_migrateDB {
 	
 	
 	function migrateNetworkToNetwork() {
+		global $wpdb;
 
 		pb_backupbuddy::status( 'details', 'Starting migration steps for `Network -> Network` sites.' );
 
 		// Multisite Network domain & path from site url:
 		$url_parts = parse_url( $this->restoreData['siteurl'] );
-		$this->multisite->destinationDomain =  $url_parts['host'];
+		$multisite_destination_domain =  $url_parts['host'];
 		if ( isset( $url_parts['path'] ) ) {
 			$destination_path = rtrim( $url_parts['path'], '/\\' ) . '/';
 		} else {
 			$destination_path = '/';
 		}
 		
-		//pb_update_domain_path( $this->restoreData['dat']['domain'], $this->multisite->destinationDomain, $this->restoreData['dat']['path'], $destination_path ); // $old_domain, $this->multisite->destinationDomain, $old_path, $destination_path
+		//pb_update_domain_path( $this->restoreData['dat']['domain'], $multisite_destination_domain, $this->restoreData['dat']['path'], $destination_path ); // $old_domain, $multisite_destination_domain, $old_path, $destination_path
 		$old_domain = $this->restoreData['dat']['domain'];
 		$old_path = $this->restoreData['dat']['path'];
 
-		pb_backupbuddy::status( 'details', 'Multisite Network URLs: Old domain: `' . $old_domain . '`; new domain: `' . $this->multisite->destinationDomain . '`; old path: `' . $old_path . '`; new path: `' . $destination_path . '`.' );
+		pb_backupbuddy::status( 'details', 'Multisite Network URLs: Old domain: `' . $old_domain . '`; new domain: `' . $multisite_destination_domain . '`; old path: `' . $old_path . '`; new path: `' . $destination_path . '`.' );
 
 
 		// BLOGS TABLE-----
 
 		// Update blog path for all sites that had the old domain and started with the old path in BLOGS table.
 		if ( $old_path != '/' ) { // Used to be a subdomain so we can more safely replace.
-			mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "blogs` SET path=REPLACE( path, '" . backupbuddy_core::dbEscape( $old_path ) . "', '" . backupbuddy_core::dbEscape( $destination_path ) . "') WHERE domain='" . backupbuddy_core::dbEscape( $old_domain ) . "' AND path LIKE '" . backupbuddy_core::dbEscape( $old_path ) . "%'" );
-			pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating paths in blogs table to `' . backupbuddy_core::dbEscape( $destination_path ) . '` (old path was a subdirectory).' );
+			$wpdb->query( "UPDATE `" . $this->overridePrefix . "blogs` SET path=REPLACE( path, '" . backupbuddy_core::dbEscape( $old_path ) . "', '" . backupbuddy_core::dbEscape( $destination_path ) . "') WHERE domain='" . backupbuddy_core::dbEscape( $old_domain ) . "' AND path LIKE '" . backupbuddy_core::dbEscape( $old_path ) . "%'" );
+			pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating paths in blogs table to `' . backupbuddy_core::dbEscape( $destination_path ) . '` (old path was a subdirectory).' );
 		} else { // Used to be in root so much prepend new path.
-			mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "blogs` SET path=concat( '" . backupbuddy_core::dbEscape( rtrim( $destination_path, '/\\' ) ) . "', path ) WHERE domain='" . backupbuddy_core::dbEscape( $old_domain ) . "'" );
-			pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating paths in blogs table to `' . backupbuddy_core::dbEscape( $destination_path ) . '` (old path was root).' );
+			$wpdb->query( "UPDATE `" . $this->overridePrefix . "blogs` SET path=concat( '" . backupbuddy_core::dbEscape( rtrim( $destination_path, '/\\' ) ) . "', path ) WHERE domain='" . backupbuddy_core::dbEscape( $old_domain ) . "'" );
+			pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating paths in blogs table to `' . backupbuddy_core::dbEscape( $destination_path ) . '` (old path was root).' );
 		}
-		if ( mysql_error() != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error() ); }
+		if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 
 		// Update blog domain for all matching sites.
-		mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "blogs` SET domain='" . backupbuddy_core::dbEscape( $this->multisite->destinationDomain ) . "' WHERE domain='" . backupbuddy_core::dbEscape( $old_domain ) . "'" );
-		pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating domain in blogs table to `' . backupbuddy_core::dbEscape( $this->multisite->destinationDomain ) . '`.' );
-		if ( mysql_error() != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error() ); }
+		$wpdb->query( "UPDATE `" . $this->overridePrefix . "blogs` SET domain='" . backupbuddy_core::dbEscape( $multisite_destination_domain ) . "' WHERE domain='" . backupbuddy_core::dbEscape( $old_domain ) . "'" );
+		pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating domain in blogs table to `' . backupbuddy_core::dbEscape( $multisite_destination_domain ) . '`.' );
+		if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
+
 
 		// SITE TABLE-----
 
 		// Update blog path for all matching sites in SITE table.
 		if ( $old_path != '/' ) { // Used to be a subdomain so we can more safely replace.
-			mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "site` SET path=REPLACE( path, '" . backupbuddy_core::dbEscape( $old_path ) . "', '" . backupbuddy_core::dbEscape( $destination_path ) . "') WHERE domain='" . backupbuddy_core::dbEscape( $old_domain ) . "' AND path LIKE '" . backupbuddy_core::dbEscape( $old_path ) . "%'" );
-			pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating paths in site table to `' . backupbuddy_core::dbEscape( $destination_path ) . '` (old path was a subdirectory).' );
+			$wpdb->query( "UPDATE `" . $this->overridePrefix . "site` SET path=REPLACE( path, '" . backupbuddy_core::dbEscape( $old_path ) . "', '" . backupbuddy_core::dbEscape( $destination_path ) . "') WHERE domain='" . backupbuddy_core::dbEscape( $old_domain ) . "' AND path LIKE '" . backupbuddy_core::dbEscape( $old_path ) . "%'" );
+			pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating paths in site table to `' . backupbuddy_core::dbEscape( $destination_path ) . '` (old path was a subdirectory).' );
 		} else { // Used to be in root so much prepend new path.
-			mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "site` SET path=concat( '" . backupbuddy_core::dbEscape( rtrim( $destination_path, '/\\' ) ) . "', path ) WHERE domain='" . backupbuddy_core::dbEscape( $old_domain ) . "'" );
-			pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating paths in site table to `' . backupbuddy_core::dbEscape( $destination_path ) . '` (old path was root).' );
+			$wpdb->query( "UPDATE `" . $this->overridePrefix . "site` SET path=concat( '" . backupbuddy_core::dbEscape( rtrim( $destination_path, '/\\' ) ) . "', path ) WHERE domain='" . backupbuddy_core::dbEscape( $old_domain ) . "'" );
+			pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating paths in site table to `' . backupbuddy_core::dbEscape( $destination_path ) . '` (old path was root).' );
 		}
-		if ( mysql_error() != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error() ); }
+		if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 
 		// Update blog domain for all matching sites.
-		mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "site` SET domain='" . backupbuddy_core::dbEscape( $this->multisite->destinationDomain ) . "' WHERE domain='" . backupbuddy_core::dbEscape( $old_domain ) . "'" );
-		pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating domain in site table to `' . backupbuddy_core::dbEscape( $this->multisite->destinationDomain ) . '`.' );
-		if ( mysql_error() != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error() ); }
+		$wpdb->query( "UPDATE `" . $this->overridePrefix . "site` SET domain='" . backupbuddy_core::dbEscape( $multisite_destination_domain ) . "' WHERE domain='" . backupbuddy_core::dbEscape( $old_domain ) . "'" );
+		pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating domain in site table to `' . backupbuddy_core::dbEscape( $multisite_destination_domain ) . '`.' );
+		if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 
 		pb_backupbuddy::status( 'details', 'Finished migration steps for `Network -> Network` sites.' );
 		return true;
@@ -353,7 +422,7 @@ class backupbuddy_migrateDB {
 	
 	
 	function migrateStandaloneToMultisiteImport() {
-	
+		
 		global $wpdb;
 		global $wp_version;
 		pb_backupbuddy::status( 'details', 'Starting migration steps for `Standalone -> Multisite Import` sites.' );
@@ -374,29 +443,23 @@ class backupbuddy_migrateDB {
 		
 		// Update upload_path in options table.
 		if ( version_compare( $wp_version, '3.5', '>=') ) { // As of WP v3.5 substies should have upload_path option removed.
-			mysql_query( "DELETE FROM `" . $this->restoreData['databaseSettings']['prefix'] . "options` WHERE option_name='upload_path' LIMIT 1", $wpdb->dbh );
-			pb_backupbuddy::status( 'details', 'Deleted ' . mysql_affected_rows( $wpdb->dbh ) . ' row(s) as upload_path is no longer needed by Multisite.' );
+			$wpdb->query( "DELETE FROM `" . $this->overridePrefix . "options` WHERE option_name='upload_path' LIMIT 1" );
+			pb_backupbuddy::status( 'details', 'Deleted ' . $wpdb->rows_affected . ' row(s) as upload_path is no longer needed by Multisite.' );
 		} else {
-			mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "options` SET option_value='" . backupbuddy_core::dbEscape( str_replace( $this->restoreData['siteurl'] . '/', '', $this->networkUploadURLReal ) ) . "' WHERE option_name='upload_path' LIMIT 1", $wpdb->dbh );
-			pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows( $wpdb->dbh ) . ' row(s) while updating uploads URL in options table. New value: ' . str_replace( $this->restoreData['siteurl'] . '/', '', $this->networkUploadURLReal ) );
+			$wpdb->query( "UPDATE `" . $this->overridePrefix . "options` SET option_value='" . backupbuddy_core::dbEscape( str_replace( $this->restoreData['siteurl'] . '/', '', $this->networkUploadURLReal ) ) . "' WHERE option_name='upload_path' LIMIT 1" );
+			pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affacted . ' row(s) while updating uploads URL in options table. New value: ' . str_replace( $this->restoreData['siteurl'] . '/', '', $this->networkUploadURLReal ) );
 		}
-		if ( mysql_error( $wpdb->dbh ) != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error( $wpdb->dbh ) ); }
+		if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 		
 		// Update user roles option_name row.
-		mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "options` SET option_name='" . $this->restoreData['databaseSettings']['prefix'] . "user_roles' WHERE option_name LIKE '%\_user\_roles' LIMIT 1", $wpdb->dbh );
-		pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows( $wpdb->dbh ) . ' row(s) while updating user roles option_name to `' . $this->restoreData['databaseSettings']['prefix'] . 'user_roles`.' );
-		if ( mysql_error( $wpdb->dbh ) != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error( $wpdb->dbh ) ); }
+		$wpdb->query( "UPDATE `" . $this->overridePrefix . "options` SET option_name='" . $this->overridePrefix . "user_roles' WHERE option_name LIKE '%\_user\_roles' LIMIT 1" );
+		pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating user roles option_name to `' . $this->overridePrefix . 'user_roles`.' );
+		if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 		
 		// Update fileupload_url in options table.
-		mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "options` SET option_value='" . backupbuddy_core::dbEscape( $this->restoreData['upload_url'] ) . "' WHERE option_name='fileupload_url' LIMIT 1", $wpdb->dbh );
-		pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows( $wpdb->dbh ) . ' row(s) while updating fileupload_url in options table. New value: `' . $this->restoreData['upload_url'] . '`.' );
-		if ( mysql_error( $wpdb->dbh ) != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error( $wpdb->dbh ) ); }
-		
-		
-		// Update user level meta_key in user_meta table.
-		// TODO: moved to bottom of this file.
-		//mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "options` SET option_name='" . $this->restoreData['databaseSettings']['prefix'] . "user_roles' WHERE option_name LIKE '%_user_roles' LIMIT 1" );
-		//pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating user roles option_name to `' . $this->restoreData['databaseSettings']['prefix'] . 'user_roles`.' );
+		$wpdb->query( "UPDATE `" . $this->overridePrefix . "options` SET option_value='" . backupbuddy_core::dbEscape( $this->restoreData['upload_url'] ) . "' WHERE option_name='fileupload_url' LIMIT 1" );
+		pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating fileupload_url in options table. New value: `' . $this->restoreData['upload_url'] . '`.' );
+		if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 		
 		pb_backupbuddy::status( 'details', 'Finished migration steps for `Standalone -> Multisite Import` sites.' );
 
@@ -410,7 +473,7 @@ class backupbuddy_migrateDB {
 		global $wpdb, $wp_version;
 		pb_backupbuddy::status( 'details', 'Starting migration steps for `Multisite Export -> Multisite Import` sites.' );
 		
-		// Note for any destination of multisite_import: Users tables exist temporarily in their normal location so we replace them like a normal standalone site. The next import step will merge them into the multisite tables.
+		// NOTE for any destination of multisite_import: Users tables exist temporarily in their normal location so we replace them like a normal standalone site. The next import step will merge them into the multisite tables.
 		
 		// The old virtual uploads URL. Standalone source like: http://getbackupbuddy.com/wp-content/uploads/. BB doesnt currently support moved uploads. Unshifted to place these replacements FIRST in the array of URLs to replace.
 		pb_backupbuddy::status( 'details', 'Old virtual uploads URL: ' . $this->restoreData['dat']['upload_url'] );
@@ -433,26 +496,20 @@ class backupbuddy_migrateDB {
 		array_unshift( $this->newFullReplace, $this->networkUploadURLReal );
 		
 		// Update upload_path in options table.
-		// Update upload_path in options table.
 		if ( version_compare( $wp_version, '3.5', '>=') ) { // As of WP v3.5 substies should have upload_path option removed.
-			mysql_query( "DELETE FROM `" . $this->restoreData['databaseSettings']['prefix'] . "options` WHERE option_name='upload_path' LIMIT 1", $wpdb->dbh );
-			pb_backupbuddy::status( 'details', 'Deleted ' . mysql_affected_rows( $wpdb->dbh ) . ' row(s) as upload_path is no longer needed by Multisite.' );
-			if ( mysql_error( $wpdb->dbh ) != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error( $wpdb->dbh ) ); }
+			$wpdb->query( "DELETE FROM `" . $this->overridePrefix . "options` WHERE option_name='upload_path' LIMIT 1" );
+			pb_backupbuddy::status( 'details', 'Deleted ' . $wpdb->rows_affected . ' row(s) as upload_path is no longer needed by Multisite.' );
+			if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 		} else {
-			mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "options` SET option_value='" . backupbuddy_core::dbEscape( str_replace( $this->restoreData['siteurl'] . '/', '', $this->networkUploadURLReal ) ) . "' WHERE option_name='upload_path' LIMIT 1", $wpdb->dbh );
-			pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows( $wpdb->dbh ) . ' row(s) while updating upload_path in options table. New value: ' . str_replace( $this->restoreData['siteurl'] . '/', '', $this->networkUploadURLReal ) );
-			if ( mysql_error( $wpdb->dbh ) != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error( $wpdb->dbh ) ); }
+			$wpdb->query( "UPDATE `" . $this->overridePrefix . "options` SET option_value='" . backupbuddy_core::dbEscape( str_replace( $this->restoreData['siteurl'] . '/', '', $this->networkUploadURLReal ) ) . "' WHERE option_name='upload_path' LIMIT 1" );
+			pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating upload_path in options table. New value: ' . str_replace( $this->restoreData['siteurl'] . '/', '', $this->networkUploadURLReal ) );
+			if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 		}
 		
 		// Update fileupload_url in options table.
-		mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "options` SET option_value='" . backupbuddy_core::dbEscape( $this->restoreData['upload_url'] ) . "' WHERE option_name='fileupload_url' LIMIT 1", $wpdb->dbh );
-		pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows( $wpdb->dbh ) . ' row(s) while updating fileupload_url in options table. New value: `' . $this->restoreData['upload_url'] . '`.' );
-		if ( mysql_error( $wpdb->dbh ) != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error( $wpdb->dbh ) ); }
-		
-		// Update user roles option_name row.
-		// TODO: moved to bottom of this file.
-		//mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "options` SET option_name='" . $this->restoreData['databaseSettings']['prefix'] . "user_roles' WHERE option_name LIKE '%_user_roles' LIMIT 1" );
-		//pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating user roles option_name to `' . $this->restoreData['databaseSettings']['prefix'] . 'user_roles`.' );
+		$wpdb->query( "UPDATE `" . $this->overridePrefix . "options` SET option_value='" . backupbuddy_core::dbEscape( $this->restoreData['upload_url'] ) . "' WHERE option_name='fileupload_url' LIMIT 1" );
+		pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating fileupload_url in options table. New value: `' . $this->restoreData['upload_url'] . '`.' );
+		if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 		
 		pb_backupbuddy::status( 'details', 'Finished migration steps for `Multisite Export -> Multisite Import` sites.' );
 		return true;
@@ -463,6 +520,7 @@ class backupbuddy_migrateDB {
 	// ********** BEGIN MULTISITE EXPORT -> STANDALONE  **********
 	function migrateMultisiteExportToStandalone() {
 		
+		global $wpdb;
 		pb_backupbuddy::status( 'details', 'Starting migration steps for `Multisite Export -> Standalone` sites.' );
 		
 		// IMPORTANT: Upload URLs _MUST_ be updated before doing a full URL replacement or else the first portion of the URL will be migrated so these will no longer match. array_unshift() is used to bump these to the top of the list to update.
@@ -492,18 +550,14 @@ class backupbuddy_migrateDB {
 		}
 		
 		// Update upload_path in options table to be default blank value.
-		mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "options` SET option_value='' WHERE option_name='upload_path' LIMIT 1" );
-		pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating uploads path in options table. New value: `` (blank default).' );
-		if ( mysql_error() != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error() ); }
+		$wpdb->query( "UPDATE `" . $this->overridePrefix . "options` SET option_value='' WHERE option_name='upload_path' LIMIT 1" );
+		pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating uploads path in options table. New value: `` (blank default).' );
+		if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 		
 		pb_backupbuddy::status( 'details', 'Finished migration steps for `Multisite Export -> Standalone` sites.' );
 		return true;
 	} // End migrateMultisiteExportToStandalone().
 	// ********** END MULTISITE EXPORT -> STANDALONE **********
-	
-	
-	
-	
 	
 	
 	
@@ -513,7 +567,7 @@ class backupbuddy_migrateDB {
 		// Loop through the tables matching this prefix. Does NOT change data in other tables.
 		// This changes actual data on a column by column basis for very row in every table.
 		$tables = array();
-		$rows = $wpdb->get_results( "SELECT table_name FROM information_schema.tables WHERE table_name LIKE '" . str_replace( '_', '\_', $this->restoreData['databaseSettings']['prefix'] ) . "%' AND table_schema = DATABASE()", ARRAY_A );
+		$rows = $wpdb->get_results( "SELECT table_name FROM information_schema.tables WHERE table_name LIKE '" . str_replace( '_', '\_', $this->overridePrefix ) . "%' AND table_schema = DATABASE()", ARRAY_A );
 		foreach( $rows as $row ) {
 			$tables[] = $row['table_name'];
 		}
@@ -543,7 +597,7 @@ class backupbuddy_migrateDB {
 				array(
 					'Posts table site URLs.',
 					'text',
-					$this->restoreData['databaseSettings']['prefix'] . 'posts',
+					$this->overridePrefix . 'posts',
 					$this->oldURLs,
 					$this->newURLs,
 					array( 'post_content', 'post_excerpt', 'post_content_filtered' ),
@@ -551,7 +605,7 @@ class backupbuddy_migrateDB {
 				array(
 					'WordPress core database text data.',
 					'text',
-					$this->restoreData['databaseSettings']['prefix'] . 'users',
+					$this->overridePrefix . 'users',
 					$this->oldURLs,
 					$this->newURLs,
 					array( 'user_url' )
@@ -559,7 +613,7 @@ class backupbuddy_migrateDB {
 				array(
 					'WordPress core database text data.',
 					'text',
-					$this->restoreData['databaseSettings']['prefix'] . 'comments',
+					$this->overridePrefix . 'comments',
 					$this->oldURLs,
 					$this->newURLs,
 					array( 'comment_content', 'comment_author_url' )
@@ -567,7 +621,7 @@ class backupbuddy_migrateDB {
 				array(
 					'WordPress core database text data.',
 					'text',
-					$this->restoreData['databaseSettings']['prefix'] . 'links',
+					$this->overridePrefix . 'links',
 					$this->oldURLs,
 					$this->newURLs,
 					array( 'link_url', 'link_image', 'link_target', 'link_description', 'link_notes', 'link_rss' ),
@@ -575,7 +629,7 @@ class backupbuddy_migrateDB {
 				array(
 					'WordPress core database serialized data.',
 					'serialized',
-					$this->restoreData['databaseSettings']['prefix'] . 'options',
+					$this->overridePrefix . 'options',
 					$this->oldFullReplace,
 					$this->newFullReplace,
 					array( 'option_value' )
@@ -591,7 +645,7 @@ class backupbuddy_migrateDB {
 				array(
 					'WordPress core database serialized data.',
 					'serialized',
-					$this->restoreData['databaseSettings']['prefix'] . 'postmeta',
+					$this->overridePrefix . 'postmeta',
 					$this->oldFullReplace,
 					$this->newFullReplace,
 					array( 'meta_value' ),
@@ -599,7 +653,7 @@ class backupbuddy_migrateDB {
 				array(
 					'WordPress core database serialized data.',
 					'serialized',
-					$this->restoreData['databaseSettings']['prefix'] . 'commentmeta',
+					$this->overridePrefix . 'commentmeta',
 					$this->oldFullReplace,
 					$this->newFullReplace,
 					array( 'meta_value' ),
@@ -656,17 +710,17 @@ class backupbuddy_migrateDB {
 		
 		
 		// Update table prefixes in some WordPress meta data. $this->networkPrefix is set to the normal prefix in non-ms environment.
-		$old_prefix = $this->restoreData['dat']['db_prefix'];
-		$new_prefix = backupbuddy_core::dbEscape( $this->restoreData['databaseSettings']['prefix'] );
-		pb_backupbuddy::status( 'details', 'Old DB prefix: `' . $old_prefix . '`; New DB prefix: `' . $new_prefix . '`. Network prefix: `' . $this->networkPrefix . '`' );
-		if ($old_prefix != $new_prefix ) {
-			mysql_query("UPDATE `".$new_prefix."usermeta` SET meta_key = REPLACE(meta_key, '".$old_prefix."', '".$new_prefix."' );"); // usermeta table temporarily is in the new subsite's prefix until next step.
-			pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating meta_key\'s for DB prefix in subsite\'s [temporary if multisite] usermeta table from `' . backupbuddy_core::dbEscape( $old_prefix ) . '` to `' . backupbuddy_core::dbEscape( $new_prefix ) . '`.' );
-			if ( mysql_error() != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error() ); }
+		$old_prefix = backupbuddy_core::dbEscape( $this->restoreData['dat']['db_prefix'] );
+		$finalPrefix = backupbuddy_core::dbEscape( $this->finalPrefix );
+		pb_backupbuddy::status( 'details', 'Old DB prefix: `' . $old_prefix . '`; Override prefix: `' . $this->overridePrefix . '`. New final DB prefix (override does not apply): `' . $finalPrefix . '`. Network prefix: `' . $this->networkPrefix . '`' );
+		if ($old_prefix != $finalPrefix ) {
+			$wpdb->query( "UPDATE `". $this->overridePrefix ."usermeta` SET meta_key = REPLACE(meta_key, '" . $old_prefix . "', '" . $finalPrefix ."' );" ); // usermeta table temporarily is in the new subsite's prefix until next step.
+			pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating meta_key\'s for DB prefix in site\'s [subsite; temporary if multisite] usermeta table from `' . $old_prefix . '` to `' . $finalPrefix . '`.' );
+			if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 
-			mysql_query("UPDATE `".$new_prefix."options` SET option_name = '".$new_prefix."user_roles' WHERE option_name ='".$old_prefix."user_roles' LIMIT 1");
-			pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating option_name user_roles DB prefix in [subsite if multisite] options table to `' . backupbuddy_core::dbEscape( $new_prefix ) . '`.' );
-			if ( mysql_error() != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error() ); }
+			$wpdb->query( "UPDATE `" . $this->overridePrefix ."options` SET option_name = '" . $finalPrefix . "user_roles' WHERE option_name ='" . $old_prefix . "user_roles' LIMIT 1" );
+			pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating option_name user_roles DB prefix in [subsite if multisite] options table to `' . backupbuddy_core::dbEscape( $finalPrefix ) . '`.' );
+			if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 
 			pb_backupbuddy::status( 'message', 'Updated prefix META data.' );
 		}
@@ -680,17 +734,22 @@ class backupbuddy_migrateDB {
 
 	function finalize() {
 		// LASTLY UPDATE SITE/HOME URLS to prevent double replacement; just in case!
+		global $wpdb;
+		
+		if ( ! isset( $this->restoreData['dat']['tables_sizes'][ $this->restoreData['dat']['db_prefix'] . 'options' ] ) ) {
+			pb_backupbuddy::status( 'details', 'Options table was not backed up. Skipping finalizing database URLs for _options table.' );
+		} else {
+			// Update SITEURL in options table. Usually mass replacement will cover this but set these here just in case.
+			$wpdb->query( "UPDATE `" . $this->overridePrefix . "options` SET option_value='" . backupbuddy_core::dbEscape( $this->restoreData['siteurl'] ) . "' WHERE option_name='siteurl' LIMIT 1" );
+			pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating Site URL in options table `' . $this->overridePrefix . 'options` to `' . $this->restoreData['siteurl'] . '`.' );
+			if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
 
-		// Update SITEURL in options table. Usually mass replacement will cover this but set these here just in case.
-		mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "options` SET option_value='" . backupbuddy_core::dbEscape( $this->restoreData['siteurl'] ) . "' WHERE option_name='siteurl' LIMIT 1" );
-		pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating Site URL in options table `' . $this->restoreData['databaseSettings']['prefix'] . 'options` to `' . $this->restoreData['siteurl'] . '`.' );
-		if ( mysql_error() != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error() ); }
-
-		// Update HOME URL in options table. Usually mass replacement will cover this but set these here just in case.
-		if ( $this->restoreData['homeurl'] != '' ) {
-			mysql_query( "UPDATE `" . $this->restoreData['databaseSettings']['prefix'] . "options` SET option_value='" . backupbuddy_core::dbEscape( $this->restoreData['homeurl'] ) . "' WHERE option_name='home' LIMIT 1" );
-			pb_backupbuddy::status( 'details', 'Modified ' . mysql_affected_rows() . ' row(s) while updating Home URL in options table to `' . $this->restoreData['homeurl'] . '`.' );
-			if ( mysql_error() != '' ) { pb_backupbuddy::status( 'error', 'mysql error: ' . mysql_error() ); }
+			// Update HOME URL in options table. Usually mass replacement will cover this but set these here just in case.
+			if ( $this->restoreData['homeurl'] != '' ) {
+				$wpdb->query( "UPDATE `" . $this->overridePrefix . "options` SET option_value='" . backupbuddy_core::dbEscape( $this->restoreData['homeurl'] ) . "' WHERE option_name='home' LIMIT 1" );
+				pb_backupbuddy::status( 'details', 'Modified ' . $wpdb->rows_affected . ' row(s) while updating Home URL in options table to `' . $this->restoreData['homeurl'] . '`.' );
+				if ( ! empty( $wpdb->last_error ) ) { pb_backupbuddy::status( 'error', 'mysql error: ' . $wpdb->last_error ); }
+			}
 		}
 		
 		return true;
@@ -698,56 +757,58 @@ class backupbuddy_migrateDB {
 
 
 
-
 	/*	verify_database()
- *	
- *	Verify various contents of the database after all migration is complete.
- *	
- *	@param		
- *	@return		
- */
+	 *	
+	 *	Verify various contents of the database after all migration is complete.
+	 *	
+	 *	@param		
+	 *	@return		
+	 */
 	function verifyDatabase() {
+		global $wpdb;
 
 		//pb_backupbuddy::$classes['import']->connect_database();
-		$db_prefix = $this->restoreData['databaseSettings']['prefix'];
-
+		$db_prefix = $this->overridePrefix;
+		
+		// If wp_options was not backed up then skip this function since it checks that.
+		if ( ! isset( $this->restoreData['dat']['tables_sizes'][ $this->restoreData['dat']['db_prefix'] . 'options' ] ) ) {
+			pb_backupbuddy::status( 'details', 'Options table was not backed up. Skipping verifying the database.' );
+			return true;
+		} else {
+			pb_backupbuddy::status( 'details', 'Options table was backed up. Verifying the database.' );
+		}
+		
 		// Check site URL.
-		$result = mysql_query( "SELECT option_value FROM `{$db_prefix}options` WHERE option_name='siteurl' LIMIT 1" );
+		$result = $wpdb->get_var( "SELECT option_value FROM `{$db_prefix}options` WHERE option_name='siteurl' LIMIT 1" );
 		if ( $result === false ) {
 			pb_backupbuddy::status( 'error', 'Unable to retrieve siteurl from database. A portion of the database may not have imported (or with the wrong prefix).' );
 		} else {
-			while( $row = mysql_fetch_row( $result ) ) {
-				pb_backupbuddy::status( 'details', 'Final site URL: `' . $row[0] . '`.' );
-			}
-			mysql_free_result( $result ); // Free memory.
+			pb_backupbuddy::status( 'details', 'Final site URL: `' . $result . '`.' );
+			@$wpdb->flush(); // Free memory.
 		}
 
 		// Check home URL.
-		$result = mysql_query( "SELECT option_value FROM `{$db_prefix}options` WHERE option_name='home' LIMIT 1" );
+		$result = $wpdb->get_var( "SELECT option_value FROM `{$db_prefix}options` WHERE option_name='home' LIMIT 1" );
 		if ( $result === false ) {
 			pb_backupbuddy::status( 'error', 'Unable to retrieve home [url] from database. A portion of the database may not have imported (or with the wrong prefix).' );
 		} else {
-			while( $row = mysql_fetch_row( $result ) ) {
-				pb_backupbuddy::status( 'details', 'Final home URL: `' . $row[0] . '`.' );
-			}
+			pb_backupbuddy::status( 'details', 'Final home URL: `' . $result . '`.' );
 		}
-		@mysql_free_result( $result ); // Free memory.
+		@$wpdb->flush(); // Free memory.
 
 		// Verify media upload path.
-		$result = mysql_query( "SELECT option_value FROM `{$db_prefix}options` WHERE option_name='upload_path' LIMIT 1" );
+		$result = $wpdb->get_var( "SELECT option_value FROM `{$db_prefix}options` WHERE option_name='upload_path' LIMIT 1" );
 		if ( $result === false ) {
 			pb_backupbuddy::status( 'error', 'Unable to retrieve upload_path from database table ' . "`{$db_prefix}options`" . '. A portion of the database may not have imported (or with the wrong prefix).' );
 			$media_upload_path = '{ERR_34834984-UNKNOWN}';
 		} else {
-			while( $row = mysql_fetch_row( $result ) ) {
-				$media_upload_path = $row[0];
-			}
+			$media_upload_path = $result;
 		}
-		@mysql_free_result( $result ); // Free memory.
+		@$wpdb->flush(); // Free memory.
 
 		pb_backupbuddy::status( 'details', 'Media upload path in database options table: `' . $media_upload_path . '`.' );
 		if ( substr( $media_upload_path, 0, 1 ) == '/' ) { // Absolute path.
-			if ( !file_exists( $media_upload_path ) ) { // Media path does not exist.
+			if ( ! file_exists( $media_upload_path ) ) { // Media path does not exist.
 				$media_upload_message = 'Your media upload path is assigned a directory which does not appear to exist on this server. Please verify it is correct in your WordPress settings. Current path: `' . $media_upload_path . '`.';
 				pb_backupbuddy::alert( $media_upload_message );
 				pb_backupbuddy::status( 'warning', $media_upload_message );
@@ -764,10 +825,6 @@ class backupbuddy_migrateDB {
 	
 	
 	
-	
-
-
-
 	/*	_array_pairs_unique_first()
 	 *	
 	 *	Takes two arrays. Looks for any duplicate values in the first array. That item is removed. The corresponding item in the second array is removed also.
@@ -788,4 +845,7 @@ class backupbuddy_migrateDB {
 		$result[1] = array_merge( $result[1] );
 		return $result;
 	} // End _array_pairs_unique_first().
+
+
+
 } // end class backupbuddy_migrateDB.

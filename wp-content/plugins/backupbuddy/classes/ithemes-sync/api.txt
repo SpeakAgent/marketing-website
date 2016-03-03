@@ -72,6 +72,18 @@ backupbuddy-list-profiles
 
 
 
+backupbuddy-get-backupStatus
+	Description:
+		Get backup status log up to this point. Only supports ECHOing out the response.
+	Arguments:
+		serial- Backup serial ID unique identifier.
+	Return Array:
+		IMPORTANT: This verb is _SPECIAL_ and returns a string response not the normal array. Returns full status log, newline separated.
+
+
+
+
+
 backupbuddy-list-destinations
 	Description:
 		Get a list of destinations currently in existance.
@@ -212,6 +224,7 @@ backupbuddy-delete-destination
 			api- API version of this function. Increments of the output of this function changes.
 			status- Whether or not the action succeeded. Possible values: ok, error
 			message- Text status message.
+			destination_id- Destination ID number of the destination just deleted.
 
 
 backupbuddy-get-destinationSettings
@@ -224,6 +237,7 @@ backupbuddy-get-destinationSettings
 			status- Whether or not the action succeeded. Possible values: ok, error
 			message- Text status message.
 			settings- Array of all the settings for this destination.
+			destination_id- Destination ID number of the destination just deleted.
 
 
 backupbuddy-add-destination
@@ -238,7 +252,74 @@ backupbuddy-add-destination
 			api- API version of this function. Increments of the output of this function changes.
 			status- Whether or not the action succeeded. Possible values: ok, error
 			message- Text status message.
+			destination_id- Destination ID number of the destination just deleted.
 
 
+backupbuddy-edit-destination
+	Description:
+		Edits an existing new destionation.
+	Arguments:
+		settings- (array) Array of destination settings. See backupbuddy-add-destination settings argument for details.
+		id- (int) Numeric destination ID number.  Obtain via backupbuddy-list-destinations.
+	Return Array:
+			api- API version of this function. Increments of the output of this function changes.
+			status- Whether or not the action succeeded. Possible values: ok, error
+			message- Text status message.
+			destination_id- Destination ID number of the destination just deleted.
 
+
+backupbuddy-get-liveStats
+	Description:
+		Returns various statistics about local BackupBuddy Stash Live status.
+		NOTE: Returns bool FALSE if Live is not set up for this site.
+	Arguments:
+		[none]
+	Return Array:
+		live_username - iThemes username
+		continuous_status - 1 / 0 (int)
+		continuous_status_pretty - Enabled/Disabled
+		periodic_status - 1 / 0 (int)
+		periodic_status_pretty - Enabled/Disabled
+		database_size_bytes - Database size in bytes according to mysql; not filesizes (int)
+		database_size_pretty - Pretty filesize. Eg: 7.39 MB
+		database_tables_total - Number of tables set to back up (int)
+		database_tables_pending_delete - Number of tables pending deletion from remote server (int)
+		database_tables_sent - Tables sent so far to remote server (int)
+		database_tables_pending_send - Tables pending send to remote server (int)
+		database_tables_sent_percent - Percent of tables sent (int). Eg: 100
+		files_size_bytes - Total size of files to backup, in bytes (int)
+		files_size_pretty - Total size of files in pretty format. Eg: 162.01 MB
+		files_total - Total number of files tracking for backup. (int)
+		files_sent - Total number of files backed up so far (int)
+		files_sent_percent - Percent of files backed up (int) Eg: 100
+		files_pending_delete - Number of files pending deletion from remote server (int)
+		last_db_snapshot - Micro timestamp of last full db snapshot (creation of full .sql files) (float)
+		last_db_snapshot_pretty - Pretty time of last db snapshot. Eg: Dec 14, 2015 1:40:29 pm
+		last_db_snapshot_ago - How long ago the last db snapshot was. Eg: 14 mins ago
+		last_periodic_activity - Micro timestamp of last periodic activity (eg sending of a file, file scans, audit, etc). (float) Eg: 1450122103.65
+		last_periodic_activity_pretty - Pretty time last peridiic activity occurred. Eg: Dec 14, 2015 1:41:43 pm
+		last_periodic_activity_ago - How long ago last periodic activity occurred in pretty format. Eg: 13 mins ago
+		last_file_audit_start - Timestamp last file audit began (float) Eg: 1450122091.27
+		last_file_audit_finish - Timestamp last file audit finished (float) Eg: 1450122103.65
+
+
+backupbuddy-set-liveStatus
+	Description:
+		Pause/Resume BackupBuddy Stash Live status for continuous database and/or periodic scans (files).
+	Arguments:
+		pause_continuous-  (bool|string)  Bool true to pause, bool false to unpause, empty string '' to leave at current state. Continuous is Live database backup.
+		pause_periodic-    (bool|string)  Bool true to pause, bool false to unpause, empty string '' to leave at current state. Periodic includes file scan, db dump, cleanup, periodic snapshot triggering, etc.
+		start_run-         (bool)         Whether or not to immediately run the periodic process upon unpause. Note: If already unpaused, this has no effect.
+	Return Array:
+		continuous_status  1|0 (string)   String '1' if now enabled, else '0'.
+		periodic_status    1|0 (string)   String '1' if now enabled, else '0'.
+
+
+backupbuddy-run-liveSnapshot
+	Description:
+		Run a Live Snapshot. Includes site rescan prior to triggering snapshot. If already scanning then snapshot will be queued until process completes.
+	Arguments:
+		[none]
+	Return Array:
+		[standard]
 

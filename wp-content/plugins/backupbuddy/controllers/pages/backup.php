@@ -1,4 +1,8 @@
 <?php
+// No PHP runtime calculated yet. Try to see if test is finished.
+if ( 0 == pb_backupbuddy::$options['tested_php_runtime'] ) {
+	backupbuddy_core::php_runtime_test_results();
+}
 
 
 // Multisite Export. This file loaded from multisite_export.php.
@@ -36,4 +40,3 @@ if ( pb_backupbuddy::_GET( 'custom' ) != '' ) { // Custom page.
 	}
 
 }
-?>

@@ -1,5 +1,6 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
 
 // Remote destination testing.
 /*	remote_test()
@@ -35,7 +36,7 @@ $test_result = pb_backupbuddy_destinations::test( $form_settings );
 if ( $test_result === true ) {
 	echo 'Test successful.';
 } else {
-	echo "Test failed.\n\n";
+	echo " Test failed.\n\n";
 	echo $test_result;
 	foreach( $pb_backupbuddy_destination_errors as $pb_backupbuddy_destination_error ) {
 		echo $pb_backupbuddy_destination_error . "\n";

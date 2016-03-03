@@ -204,7 +204,7 @@ $settings_form->display_settings( 'Save Profile Settings' );
 
 if ( $profile > 2 ) {
 ?>
-<a style="float: right; margin-top: -35px; margin-right: 10px;" class="button secondary-button" title="Delete this Profile" href="admin.php?page=pb_backupbuddy_backup&delete_profile=<?php echo $profile; ?>" target="_top" onclick="
+<a style="float: right; margin-top: -35px; margin-right: 10px;" class="button secondary-button" title="Delete this Profile" href="admin.php?page=pb_backupbuddy_backup&delete_profile=<?php echo $profile; ?>" target="_blank" onclick="
 	if ( !confirm( 'Are you sure you want to delete this profile?' ) ) {
 		return false;
 	}

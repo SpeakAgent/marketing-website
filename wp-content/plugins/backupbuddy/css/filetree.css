@@ -132,6 +132,11 @@ UL.jqueryFileTree a {
 .jqueryFileTree .directory.collapsed, .jqueryFileTree .file.collapsed {
 	border-bottom: 1px solid #EBEBEB;
 }
+
+.jqueryFileTree .file.collapsed:last-child {
+	border-bottom: 0;
+}
+
 /*
 li.directory A:hover {
 	background: #BDF;

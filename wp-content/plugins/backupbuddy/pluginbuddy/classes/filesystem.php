@@ -44,7 +44,7 @@ class pb_backupbuddy_filesystem {
 	 *	@param		$recursive		boolean		Default: true. See PHP's mkdir() function for details.
 	 *	@return						boolean		Returns TRUE on success or FALSE on failure.
 	 */
-	public static function mkdir( $pathname, $mode = 0777, $recursive = true) {
+	public static function mkdir( $pathname, $mode = 0755, $recursive = true) {
 		return @mkdir( $pathname, $mode, $recursive );
 	} // End mkdir().
 	
@@ -66,6 +66,7 @@ class pb_backupbuddy_filesystem {
 			return true;
 		}
 		if ( !is_dir( $dir ) || is_link( $dir ) ) {
+			@chmod( $dir, 0777 );
 			return unlink($dir);
 		}
 		foreach ( scandir( $dir ) as $item ) {
@@ -91,20 +92,148 @@ class pb_backupbuddy_filesystem {
 	 *	This is essentially a recursive glob() although it does not use recursion to perform this.
 	 *
 	 *	@param		string		$dir		Path to pass to glob and walk through.
+	 *	@param		array 		$excludes	Array of directories to exclude, relative to the $dir.  Include beginning slash. No trailing slash.
 	 *	@return		array					Returns array of all matches found.
 	 */
-	function deepglob( $dir ) {
+	function deepglob( $dir, $excludes = array() ) {
+		$dir = rtrim( $dir, '/\\' ); // Make sure no trailing slash.
+		$excludes = str_replace( $dir, '', $excludes );
+		$dir_len = strlen( $dir );
+		
 		$items = glob( $dir . '/*' );
+		if ( false === $items ) {
+			$items = array();
+		}
 		
 		for ( $i = 0; $i < count( $items ); $i++ ) {
+			// If this file/directory begins with an exclusion then jump to next file/directory.
+			foreach( $excludes as $exclude ) {
+				if ( backupbuddy_core::startsWith( substr( $items[$i], $dir_len ), $exclude ) ) {
+					unset( $items[$i] );
+					continue 2;
+				}
+			}
+			
 			if ( is_dir( $items[$i] ) ) {
 				$add = glob( $items[$i] . '/*' );
+				if ( false === $add ) {
+					$add = array();
+				}
 				$items = array_merge( $items, $add );
 			}
 		}
 		
 		return $items;
 	} // End deepglob().
+	
+	
+	
+	/**
+	 *	pluginbuddy_filesystem->deepscandir()
+	 *
+	 *	Like the glob() function except walks down into paths to create a full listing of all results in the directory and all subdirectories.
+	 *	This is essentially a recursive glob() although it does not use recursion to perform this.
+	 *
+	 *	@param		string		$dir		Path to pass to glob and walk through.
+	 *	@param		array 		$excludes	Array of directories to exclude, relative to the $dir.  Include beginning slash. No trailing slash.
+	 *	@param		int 		$startAt	Offset to start calculating from for resumed chunking. $items must also be passed from previous run.
+	 *	@param		array 		$items		Array of items to use for resuming. Returned by this function when chunking.
+	 *	@param		int			$start_time	Timestamp to calculate elapsed runtime from.
+	 *	@param		int			$max_time	Max seconds to run for before returning for chunking if approaching. Zero (0) to disabling chunking. IMPORTANT: Does _NOT_ apply a wiggle room. Subtract wiggle from $max_time before passing.
+	 *	@return		array					Returns array of all matches found OR array( $finished = false, array( $startAt, $items ) ) if chunking due to running out of time.
+	 */
+	function deepscandir( $dir, $excludes = array(), $startAt = 0, $items = array(), $start_time = 0, $max_time = 0 ) {
+		
+		$dir = rtrim( $dir, '/\\' ); // Make sure no trailing slash.
+		$excludes = str_replace( $dir, '', $excludes );
+		$dir_len = strlen( $dir );
+		
+		// If not resuming a chunked process then get items.
+		if ( ! is_array( $items ) || ( 0 == count( $items ) ) ) {
+			$items = scandir( $dir ); //glob( $dir . '/*' );
+			if ( false === $items ) {
+				$items = array();
+			} else {
+				foreach( $items as $i =>  &$item ) {
+					if ( ( '.' == $item ) || ( '..' == $item ) ) {
+						unset( $items[$i] );
+						continue;
+					}
+					$item = $dir . '/' . $item; // Add directory.
+				}
+			}
+			$items = array_values( $items ); // Remove missing keyed items.
+		} else {
+			pb_backupbuddy::status( 'details', 'Deep scan resuming at `' . $startAt . '`.' );
+		}
+		
+		/*
+		echo '<pre>';
+		print_r( $items );
+		echo '</pre>';
+		*/
+		//die();
+		
+		
+		for ( $i = $startAt; $i < count( $items ); $i++ ) { // max( array_keys
+			
+			//echo 'Ran: ' . $i . ' = ' . $items[ $i ] . '<br>';
+			
+			/*
+			if ( ! isset( $items[$i] ) ) { // Item was removed so index is missing. Skip.
+				continue;
+			}
+			*/
+			
+			/*
+			echo $items[$i] . '<br>';
+			*/
+			
+			// If this file/directory begins with an exclusion then jump to next file/directory.
+			foreach( $excludes as $exclude ) {
+				if ( backupbuddy_core::startsWith( substr( $items[$i], $dir_len ), $exclude ) ) {
+					//echo 'Exclude: ' . $items[$i] . ' -- Matches: ' . $exclude . '<br>';
+					//unset( $items[$i] );
+					$items[$i] = '';
+					continue 2;
+				}
+			}
+			
+			if ( is_dir( $items[$i] ) ) {
+				$adds = scandir( $items[$i] ); //glob( $items[$i] . '/*' );
+				if ( ! is_array( $adds ) ) {
+					$adds = array();
+				} else {
+					foreach( $adds as $j => &$addItem ) {
+						if ( ( '.' == $addItem ) || ( '..' == $addItem ) ) {
+							unset( $adds[$j] );
+							continue;
+						}
+						$addItem = $items[$i] . '/' . $addItem; // Add directory.
+					}
+					//$items = array_values( $items );
+				}
+				$items = array_merge( $items, $adds );
+			}
+			
+			// Check if enough time remains to continue, else chunk.
+			if ( 0 != $max_time ) { // Chunking enabled.
+				if ( ( time() - $start_time ) > $max_time ) { // Not enough time left.
+					$startAt = $i;
+					if ( 0 == $startAt ) {
+						$error = 'Error #34848934: No progress was made during file scan. Halting to prevent looping repeatedly at beginning of deep scan.';
+						pb_backupbuddy::status( 'error', $error );
+						return $error;
+					}
+					pb_backupbuddy::status( 'details', 'Running out of time calculating deep file scan. Chunking at position `' . $startAt . '`. Items so far: `' . count( $items ) . '`. Elapsed: `' . ( time() - $start_time ) . '` secs. Max time: `' . $max_time . '` secs.' );
+					return array( false, array( ( $i + 1 ), $items ) );
+				}
+			}
+			
+		} // end for.
+		
+		return array_filter( $items ); // Removed any empty values (excludes items).
+	} // End deepscandir().
 	
 	
 	
@@ -295,6 +424,9 @@ class pb_backupbuddy_filesystem {
 			case '0':
 				return 'Command completed & returned normally.';
 				break;
+			case '126':
+				return 'Command invoked cannot execute. Check command has valid permisions and execute capability.';
+				break;
 			case '127':
 				return 'Command not found.';
 				break;
@@ -317,18 +449,32 @@ class pb_backupbuddy_filesystem {
 	}
 	
 	// Newest to oldest.
-	function glob_by_date( $pattern ) {
+	function glob_by_date( $pattern, $mode = 'ctime' ) {
 		$file_array = array();
 		$glob_result = glob( $pattern );
 		if ( ! is_array( $glob_result ) ) {
 			$glob_result = array();
 		}
-		foreach ( $glob_result as $filename ) {
-			$ctime = filectime( $filename );
-			while( isset( $file_array[$ctime] ) ) { // Avoid collisions.
-				$ctime = $ctime + 0.1;
+		foreach ( $glob_result as $i => $filename ) {
+			if ( 'ctime' == $mode ) {
+				$time = @filectime( $filename );
+			} elseif ( 'mtime' == $mode ) {
+				$time = @filemtime( $filename );
+			} else {
+				error_log( 'BackupBuddy Error #2334984489383: Invalid glob_by_date mode: `' . $mode . '`.' );
+				return false;
 			}
-			$file_array[$ctime] = $filename; // or just $filename
+			if ( false === $time ) { // File missing or no longer accessible?
+				if ( ! file_exists( $filename ) ) { // File went away.
+					unset( $glob_result[ $i ] );
+				} else { // Uknown mod time. Set as current time.
+					$time = time();
+				}
+			}
+			while( isset( $file_array[$time] ) ) { // Avoid collisions.
+				$time = $time + 0.1;
+			}
+			$file_array[$time] = $filename; // or just $filename
 		}
 		krsort( $file_array );
 		return $file_array;
@@ -338,6 +484,3 @@ class pb_backupbuddy_filesystem {
 	
 } // End class pluginbuddy_settings.
 
-
-
-?>

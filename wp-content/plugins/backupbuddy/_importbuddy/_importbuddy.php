@@ -9,20 +9,28 @@
  */
 
 $php_minimum = '5.1'; // User's PHP must be equal or newer to this version.
+$ignore_not_writable = false; // Set to true to ignore is_writable() returning false on this directory. Useful for servers lying about the writable status of the directory.
 //error_reporting( E_ALL );
 
 if ( version_compare( PHP_VERSION, $php_minimum ) < 0 ) {
 	die( 'ERROR #9013. See <a href="http://ithemes.com/codex/page/BackupBuddy:_Error_Codes#9013">this codex page for details</a>. Sorry! PHP version ' . $php_minimum . ' or newer is required for BackupBuddy to properly run. You are running PHP version ' . PHP_VERSION . '.' );
 }
 
+global $importbuddy_file;
+$importbuddy_file = basename( __FILE__ ); // filename of importbuddy.php (or whatever it is named).
+
+global $wp_version;
+$wp_version = '4.4'; // Spoof a version for new wp-db class.
+
 $abspath = rtrim( dirname( __FILE__ ), '\\/' ) . '/';
 define( 'ABSPATH', $abspath );
+define( 'WP_CONTENT_DIR', $abspath . 'wp-content' );
 define( 'PB_BB_VERSION', '#VERSION#' );
 define( 'PB_PASSWORD', '#PASSWORD#' );
 
 // Used by wpdb class.
-define('DB_CHARSET', 'utf8');
-define('DB_COLLATE', '');
+define('DB_CHARSET', 'utf8'); // Default only. Overriden later if needed.
+define('DB_COLLATE', ''); // Default only. Overriden alter if needed.
 
 @date_default_timezone_set( @date_default_timezone_get() ); // Prevents date() from throwing a warning if the default timezone has not been set. Run prior to any file_exists()!
 
@@ -42,25 +50,38 @@ if (
 }
 
 
-// Unpack importbuddy files into importbuddy directory.
-if ( !file_exists( ABSPATH . 'importbuddy' ) || ( ( count( $_GET ) == 0 ) && ( count( $_POST ) == 0 ) ) ) {
+// If inside BB install then die. Else unpack importbuddy if needed.
+if ( @file_exists( @dirname( @dirname( __FILE__ ) ) . '/backupbuddy.php' ) ) {
+	
+	die( '<html>Access Denied</html>' );
+	
+}
+
+
+// Unpack importbuddy files into importbuddy directory. Does this when importbuddy directory does not exist OR if now request GET or POST params are sent (aka the first page only).
+if ( ! file_exists( ABSPATH . 'importbuddy' ) || ( ( count( $_GET ) == 0 ) && ( count( $_POST ) == 0 ) ) ) {
+	
+	// Make sure this file is complete and contains all the packed data to the end before proceeding.
+	if ( false === strpos( file_get_contents( __FILE__ ), '###PACKDATA' . ',END' ) ) { // Concat here so we don't false positive on this line when searching.
+		die( 'ERROR: It appears your `' . __FILE__ . '` file is incomplete.  It may have not finished downloading or uploading completely.  Please try re-downloading the script from within BackupBuddy in WordPress (do not just copy the file from the plugin directory) and re-uploading it.' );
+	}
+	
 	$unpack_importbuddy = true;
 	if ( file_exists( ABSPATH . 'importbuddy' ) ) { // ImportBuddy directory already exists. We may need to re-unpack it if this file has been updated since.
 		$signature = @file_get_contents( ABSPATH . 'importbuddy/_signature.php' );
 		$signature = trim( str_replace( '<?php die(); ?>', '', $signature ) );
 		if ( md5( PB_BB_VERSION . PB_PASSWORD ) != $signature ) { // Signature mismatch. We will need to delete and unpack again to update.
-			echo '<!-- unlinking existing importbuddy directory. -->';
+			//echo '<!-- unlinking existing importbuddy directory. -->'; 5.1.0.10: Broke causing headers already sent error due to auth.
 			recursive_unlink( ABSPATH . 'importbuddy' );
 		} else {
 			$unpack_importbuddy = false;
 		}
 	}
 	if ( true === $unpack_importbuddy ) {
-		unpack_importbuddy();
+		unpack_importbuddy( $ignore_not_writable );
 		@file_put_contents( ABSPATH . 'importbuddy/_signature.php', '<?php die(); ?>' . md5( PB_BB_VERSION . PB_PASSWORD ) ); // Create a hash of this ImportBuddy version & password. On accessing importbuddy.php's authentication page all importbuddy files will be freshly unpacked if the importbuddy.php version and/or password mismatches to allow users to just replace importbuddy.php to upgrade ImportBuddy or password.
 	}
 }
-
 
 
 // Database wrapper.
@@ -100,19 +121,14 @@ array_map('recursive_unlink',glob($path.'/*'))==@rmdir($path);
 *
 *	@return		null
 */
-function unpack_importbuddy() {
-	if ( !is_writable( ABSPATH ) ) {
+function unpack_importbuddy( $ignore_not_writable = false ) {
+	if ( ( ! is_writable( ABSPATH ) ) && ( false === $ignore_not_writable ) ) {
 		echo 'Error #224834. This directory, `' . ABSPATH . '`, is not write enabled according to the server. Please verify proper write permissions to continue. If this persists, contact your web hosting provider and tell them that is_writable("' . ABSPATH . '") returns FALSE in PHP.';
 		die();
 	} else {
 		$unpack_file = '';
 		
-		// Make sure the file is complete and contains all the packed data to the end.
-		if ( false === strpos( file_get_contents( ABSPATH . 'importbuddy.php' ), '###PACKDATA' . ',END' ) ) { // Concat here so we don't false positive on this line when searching.
-			die( 'ERROR: It appears your importbuddy.php file is incomplete.  It may have not finished downloading or uploading completely.  Please try re-downloading the script from within BackupBuddy in WordPress (do not just copy the file from the plugin directory) and re-uploading it.' );
-		}
-		
-		$handle = @fopen( ABSPATH . 'importbuddy.php', 'r' );
+		$handle = @fopen( __FILE__, 'r' );
 		if ( $handle ) {
 			while ( ( $buffer = fgets( $handle ) ) !== false ) {
 				if ( substr( $buffer, 0, 11 ) == '###PACKDATA' ) {
@@ -148,7 +164,7 @@ function unpack_importbuddy() {
 			}
 			fclose( $handle );
 		} else {
-			echo 'ERROR #54455: Unable to open importbuddy.php file for reading in packaged data.<br>';
+			echo 'ERROR #54455: Unable to open `' . __FILE__ . '` file for reading in packaged data.<br>';
 		}
 	}
 }

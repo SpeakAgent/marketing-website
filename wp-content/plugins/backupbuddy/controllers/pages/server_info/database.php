@@ -86,10 +86,8 @@ echo '</div>';
 		$prefix = $wpdb->prefix;
 		$prefix_length = strlen( $wpdb->prefix );
 		
-		$additional_includes = explode( "\n", $profile['mysqldump_additional_includes'] );
-		array_walk( $additional_includes, create_function('&$val', '$val = trim($val);')); 
-		$additional_excludes = explode( "\n", $profile['mysqldump_additional_excludes'] );
-		array_walk( $additional_excludes, create_function('&$val', '$val = trim($val);')); 
+		$additional_includes = backupbuddy_core::get_mysqldump_additional( 'includes', $profile );
+		$additional_excludes = backupbuddy_core::get_mysqldump_additional( 'excludes', $profile );
 		
 		$total_size = 0;
 		$total_size_with_exclusions = 0;

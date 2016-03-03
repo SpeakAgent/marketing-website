@@ -5,9 +5,8 @@
  *	Handles zipping and unzipping, using the best methods available and falling back to worse methods
  *	as needed for compatibility. Allows for forcing compatibility modes.
  *	
- *	Version: 3.0.0
- *	Author: Dustin Bolton
- *	Author URI: http://dustinbolton.com/
+ *	@since 3.0.0
+ *	@author Dustin Bolton
  *
  *	$temp_dir		string		Temporary directory absolute path for temporary file storage. Must be writable!
  *	$zip_methods	array		Optional. Array of available zip methods to use. Useful for not having to re-test every time.

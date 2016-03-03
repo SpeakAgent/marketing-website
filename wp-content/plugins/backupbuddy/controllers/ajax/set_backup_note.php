@@ -1,5 +1,6 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
 
 // Used for setting a note on a backup archive in the backup listing.
 
@@ -42,6 +43,7 @@ $serial = backupbuddy_core::get_serial_from_file( $backup_file );
 
 
 require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
+pb_backupbuddy::status( 'details', 'Fileoptions instance #24.' );
 $backup_options = new pb_backupbuddy_fileoptions( backupbuddy_core::getLogDirectory() . 'fileoptions/' . $serial . '.txt' );
 if ( true === ( $result = $backup_options->is_ok() ) ) {
 	$backup_options->options['integrity']['comment'] = $note;

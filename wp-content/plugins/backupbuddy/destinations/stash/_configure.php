@@ -11,11 +11,16 @@ $pb_hide_test = false;
 $itxapi_username = '';
 $itxapi_password = '';
 
+if ( ( 'add' == $mode ) || ( 'edit' == $mode ) ) {
+	echo '<br>';
+	pb_backupbuddy::alert( 'Attention: This remote destination deprecated. For the best experience please use the newer BackupBuddy Stash (v2) destination. If you do not see it verify your server is running PHP v5.3 or newer.' );
+	echo '<br><br>';
+}
 
 if ( $mode == 'add' ) { // ADD MODE.
 	
 	
-	$credentials_form = new pb_backupbuddy_settings( 'pre_settings', false, 'action=pb_backupbuddy_backupbuddy&function=destination_picker&quickstart=' . htmlentities( pb_backupbuddy::_GET( 'quickstart' ) ) . '&add=' . htmlentities( pb_backupbuddy::_GET( 'add' ) ) . '&callback_data=' . htmlentities( pb_backupbuddy::_GET( 'callback_data' ) ) . '&sending=' . pb_backupbuddy::_GET( 'sending' ) ); // name, savepoint|false, additional querystring
+	$credentials_form = new pb_backupbuddy_settings( 'pre_settings', false, 'action=pb_backupbuddy_backupbuddy&function=destination_picker&quickstart=' . htmlentities( pb_backupbuddy::_GET( 'quickstart' ) ) . '&add=' . htmlentities( pb_backupbuddy::_GET( 'add' ) ) . '&callback_data=' . htmlentities( pb_backupbuddy::_GET( 'callback_data' ) ) . '&sending=' . pb_backupbuddy::_GET( 'sending' ) . '&selecting=' . pb_backupbuddy::_GET( 'selecting' ) ); // name, savepoint|false, additional querystring
 	
 	$credentials_form->add_setting( array(
 		'type'		=>		'text',
@@ -114,7 +119,7 @@ if ( ( $mode == 'save' ) || ( $mode == 'edit' ) || ( $itxapi_username != '' ) ) 
 		$account_details .= '.';
 		
 		if ( $mode == 'add' ) {
-			$default_name = 'My Stash';
+			$default_name = 'My Stash (v1)';
 			
 			echo $account_details;
 			//echo '<br>';
@@ -140,11 +145,11 @@ if ( ( $mode == 'save' ) || ( $mode == 'edit' ) || ( $itxapi_username != '' ) ) 
 		echo '<div style="text-align: center;">';
 		echo '
 		<b>Upgrade to more space:</b> &nbsp;
-		<a href="http://ithemes.com/member/cart.php?action=add&id=290" target="_new" style="text-decoration: none; font-weight: 300;">+ 5GB</a>, &nbsp;
-		<a href="http://ithemes.com/member/cart.php?action=add&id=290" target="_new" style="text-decoration: none; font-weight: 600; font-size: 1.1em;">+ 10GB</a>, &nbsp;
-		<a href="http://ithemes.com/member/cart.php?action=add&id=290" target="_new" style="text-decoration: none; font-weight: 800; font-size: 1.2em;">+ 25GB</a>
+		<a href="https://ithemes.com/member/cart.php?action=add&id=290" target="_blank" style="text-decoration: none; font-weight: 300;">+ 5GB</a>, &nbsp;
+		<a href="https://ithemes.com/member/cart.php?action=add&id=291" target="_blank" style="text-decoration: none; font-weight: 600; font-size: 1.1em;">+ 10GB</a>, &nbsp;
+		<a href="https://ithemes.com/member/cart.php?action=add&id=292" target="_blank" style="text-decoration: none; font-weight: 800; font-size: 1.2em;">+ 25GB</a>
 		&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
-		<a href="http://ithemes.com/member/panel/stash.php" target="_new" style="text-decoration: none;"><b>Manage Files & Account</b></a>
+		<a href="https://sync.ithemes.com/stash/" target="_blank" style="text-decoration: none;"><b>Manage Files & Account</b></a>
 		';
 		echo '<br><br></div>';
 		
@@ -189,6 +194,18 @@ if ( ( $mode == 'save' ) || ( $mode == 'edit' ) || ( $itxapi_username != '' ) ) 
 		'css'		=>		'width: 50px;',
 		'after'		=>		' backups',
 	) );
+	
+	
+	
+	$settings_form->add_setting( array(
+		'type'		=>		'title',
+		'name'		=>		'advanced_begin',
+		'title'		=>		'<span class="dashicons dashicons-arrow-right"></span> ' . __( 'Advanced Options', 'it-l10n-backupbuddy' ),
+		'row_class'	=>		'advanced-toggle-title',
+	) );
+	
+	
+	
 	$settings_form->add_setting( array(
 		'type'		=>		'text',
 		'name'		=>		'max_chunk_size',
@@ -196,7 +213,8 @@ if ( ( $mode == 'save' ) || ( $mode == 'edit' ) || ( $itxapi_username != '' ) ) 
 		'tip'		=>		__( '[Example: 5] - Enter 0 for no chunking; minimum of 5 if enabling. This is the maximum file size to send in one whole piece. Files larger than this will be transferred in pieces up to this file size one part at a time. This allows to transfer of larger files than you server may allow by breaking up the send process. Chunked files may be delayed if there is little site traffic to trigger them. 100 MB chunk sizes or less are recommended.', 'it-l10n-backupbuddy' ),
 		'rules'		=>		'required|int[0-9999999]',
 		'css'		=>		'width: 50px;',
-		'after'		=>		' MB. <span class="description">' . __( 'Default', 'it-l10n-backupbuddy' ) . ': 100 MB</span>',
+		'after'		=>		' MB. <span class="description">' . __( 'Default', 'it-l10n-backupbuddy' ) . ': 80 MB</span>',
+		'row_class'	=>		'advanced-toggle',
 	) );
 	$settings_form->add_setting( array(
 		'type'		=>		'checkbox',
@@ -206,6 +224,7 @@ if ( ( $mode == 'save' ) || ( $mode == 'edit' ) || ( $itxapi_username != '' ) ) 
 		'tip'		=>		__( '[Default: enabled] - When enabled, all transfers will be encrypted with SSL encryption. Disabling this may aid in connection troubles but results in lessened security. Note: Once your files arrive on our server they are encrypted using AES256 encryption. They are automatically decrypted upon download as needed.', 'it-l10n-backupbuddy' ),
 		'css'		=>		'',
 		'rules'		=>		'',
+		'row_class'	=>		'advanced-toggle',
 	) );
 	$settings_form->add_setting( array(
 		'type'		=>		'checkbox',
@@ -216,6 +235,7 @@ if ( ( $mode == 'save' ) || ( $mode == 'edit' ) || ( $itxapi_username != '' ) ) 
 		'css'		=>		'',
 		'after'		=>		'<span class="description"> ' . __('Uses included certificate bundle.', 'it-l10n-backupbuddy' ) . '</span>',
 		'rules'		=>		'',
+		'row_class'	=>		'advanced-toggle',
 	) );
 	if ( $mode !== 'edit' ) {
 		$settings_form->add_setting( array(
@@ -226,6 +246,7 @@ if ( ( $mode == 'save' ) || ( $mode == 'edit' ) || ( $itxapi_username != '' ) ) 
 			'tip'		=>		__( '[Default: enabled] - When enabled, you have access to manage and view all files stored in your Stash account. You will be prompted for your password to access backups for sites other than this one.  If disabled the option is entirely removed for added security. For example, you may wish to disable this feature if a client has access and you want to keep them away from your files. This option can NOT be changed without deleting and re-creating the Stash destination for added security.', 'it-l10n-backupbuddy' ),
 			'css'		=>		'',
 			'rules'		=>		'',
+			'row_class'	=>		'advanced-toggle',
 		) );
 		$settings_form->add_setting( array(
 			'type'		=>		'checkbox',
@@ -235,8 +256,20 @@ if ( ( $mode == 'save' ) || ( $mode == 'edit' ) || ( $itxapi_username != '' ) ) 
 			'tip'		=>		__( '[Default: unchecked] - When checked, selecting this destination disables browsing or accessing files stored at this destination from within BackupBuddy.', 'it-l10n-backupbuddy' ),
 			'css'		=>		'',
 			'rules'		=>		'',
+			'row_class'	=>		'advanced-toggle',
 		) );
 	}
+	$settings_form->add_setting( array(
+		'type'		=>		'checkbox',
+		'name'		=>		'disabled',
+		'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
+		'title'		=>		__( 'Disable destination', 'it-l10n-backupbuddy' ),
+		'tip'		=>		__( '[Default: unchecked] - When checked, this destination will be disabled and unusable until re-enabled. Use this if you need to temporary turn a destination off but don\t want to delete it.', 'it-l10n-backupbuddy' ),
+		'css'		=>		'',
+		'after'		=>		'<span class="description"> ' . __('Check to disable this destination until re-enabled.', 'it-l10n-backupbuddy' ) . '</span>',
+		'rules'		=>		'',
+		'row_class'	=>		'advanced-toggle',
+	) );
 	$settings_form->add_setting( array(
 		'type'		=>		'hidden',
 		'name'		=>		'itxapi_username',

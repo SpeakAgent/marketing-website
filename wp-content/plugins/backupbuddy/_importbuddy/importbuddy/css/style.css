@@ -1,4 +1,4 @@
-@import url(http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700);
+@import url(https://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700);
 
 
 /********************* 
@@ -225,6 +225,7 @@ body {
 	color: #fff;
 	font-size: 0.9em;
 	overflow:hidden;
+	z-index: 9000;
 }
 .topNav a {
 	display: block;
@@ -514,7 +515,7 @@ hr {
 	-webkit-border-radius: 5px;
 	overflow: hidden;
 	padding: 0px;
-	//height: 100%;
+	height: inherit;
 	overflow: scroll;
 }
 .modal_header {
@@ -610,6 +611,9 @@ hr {
 }
 .pb_label-warning {
 	background-color: #F89406;
+}
+.pb_label-error {
+	background-color: red;
 }
 .pb_label-important {
 	background-color: #dd4542; //#B94A48;

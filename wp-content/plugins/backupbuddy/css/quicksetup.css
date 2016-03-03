@@ -405,9 +405,6 @@ select {
 	padding: 6px 0;
 	right: 0;
 }
-#dest-1 {
-	display: none;
-}
 .box-options .ftp a {
 	background: url('destinations/ftp.jpeg') center center no-repeat;
 }
@@ -476,7 +473,7 @@ select {
 	text-align: center;
 	background: #f95050;
 	border: none;
-	font-family: 'Helvetica Neue';
+	font-family: 'Helvetica Neue', 'Open Sans', sans-serif;
 	border-bottom: 4px solid #c04343;
 	color: #fff;
 	text-decoration: none;
@@ -544,3 +541,6 @@ select {
 	text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.3);
 }
 */
+.backupbuddy-quickstart-indent {
+	margin-left: 20px;
+}

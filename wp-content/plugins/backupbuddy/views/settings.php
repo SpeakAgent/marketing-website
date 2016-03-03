@@ -2,7 +2,7 @@
 if ( !is_admin() ) { die( 'Access Denied.' ); }
 
 // Display additional information for users on Windows systems.
-if ( stristr( PHP_OS, 'WIN' ) && !stristr( PHP_OS, 'DARWIN' ) ) { // Show in WINdows but not darWIN.
+if ( stristr( PHP_OS, 'WIN' ) && ! stristr( PHP_OS, 'DARWIN' ) ) { // Show in WINdows but not darWIN.
 	pb_backupbuddy::disalert( 'windows_boost', __('Windows servers may be able to significantly boost performance, if the server allows executing .exe files (or can be configured to allow this file as an exception), by adding native Zip compatibility executable files <a href="http://ithemes.com/backupbuddy_files/backupbuddy_windows_unzip.zip">available for download here</a>. Instructions are provided within the readme.txt in the package.  This package prevents Windows from falling back to Zip compatiblity mode and works for both BackupBuddy and importbuddy.php. This is particularly useful for <a href="http://ithemes.com/codex/page/BackupBuddy:_Local_Development">local development on a Windows machine using a system like XAMPP</a>.', 'it-l10n-backupbuddy' ) );
 }
 ?>
@@ -83,29 +83,37 @@ if ( is_numeric( pb_backupbuddy::_GET( 'tab' ) ) ) {
 } else {
 	$active_tab = 0;
 }
+
+if ( is_network_admin() ) {
+	$license_url = network_admin_url( 'settings.php' );
+} else {
+	$license_url = admin_url( 'options-general.php' );
+}
+$license_url .= '?page=ithemes-licensing';
+
 pb_backupbuddy::$ui->start_tabs(
 	'settings',
 	array(
 		array(
 			'title'		=>		__( 'General Settings', 'it-l10n-backupbuddy' ),
 			'slug'		=>		'general',
-			'css'		=>		'margin-top: -11px;',
 		),
 		array(
 			'title'		=>		__( 'Advanced Settings / Troubleshooting', 'it-l10n-backupbuddy' ),
 			'slug'		=>		'advanced',
-			'css'		=>		'margin-top: -11px;',
+		),
+		array(
+			'title'		=>		__( 'Recent Activity', 'it-l10n-backupbuddy' ),
+			'slug'		=>		'activity',
 		),
 		array(
 			'title'		=>		__( 'Other', 'it-l10n-backupbuddy' ),
 			'slug'		=>		'other',
-			'css'		=>		'margin-top: -11px;',
 		),
 		array(
 			'title'		=>		__( 'Licensing', 'it-l10n-backupbuddy' ),
 			'slug'		=>		'licensing',
-			'url'		=>		'options-general.php?page=ithemes-licensing',
-			'css'		=>		'float: right; margin-top: -2px; font-style: italic;',
+			'url'		=>		$license_url,
 		),
 	),
 	'width: 100%;',
@@ -122,6 +130,10 @@ pb_backupbuddy::$ui->end_tab();
 
 pb_backupbuddy::$ui->start_tab( 'advanced' );
 require_once( 'settings/_advanced.php' );
+pb_backupbuddy::$ui->end_tab();
+
+pb_backupbuddy::$ui->start_tab( 'activity' );
+require_once( 'settings/_activity.php' );
 pb_backupbuddy::$ui->end_tab();
 
 pb_backupbuddy::$ui->start_tab( 'other' );

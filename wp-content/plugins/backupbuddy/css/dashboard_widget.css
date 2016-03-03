@@ -1,3 +1,115 @@
+#pb_backupbuddy_stats .tabs {
+	border-bottom: 1px solid #ddd;
+	margin: 0;
+}
+
+#pb_backupbuddy_stats .tabs:after {
+	content: "";
+	display: table;
+	clear: both;
+}
+
+#pb_backupbuddy_stats .tab-toggle {
+	border: 1px solid #ddd;
+	border-bottom: none;
+	font-weight: bold;
+	cursor:pointer;
+	background: #f1f1f1;
+	font-weight: normal;
+	float:left;
+	margin: 0 0 0 5px;
+}
+
+#pb_backupbuddy_stats .tab-toggle.selected {
+	background: #fff;
+	font-weight: bold;
+	cursor:default;
+}
+
+#pb_backupbuddy_stats .stash-live-wrapper {
+	margin: 2em 0 0 0;
+	border: 1px solid #e5e5e5;
+	-webkit-box-shadow: 0 1px 1px rgba(0,0,0,0.04);
+	box-shadow: 0 1px 1px rgba(0,0,0,0.04);
+	text-align: center;
+}
+
+#pb_backupbuddy_stats .stash-live-wrapper .spinner {
+	float:none;
+	margin: 2em auto;
+}
+
+#pb_backupbuddy_stats .backupbuddy-live-stats-currently {
+	border-bottom: 1px solid #e5e5e5;
+	text-align: left;
+	overflow: hidden;
+}
+
+#pb_backupbuddy_stats .backupbuddy-pulsing-orb {
+	display:inline-block;
+	width: 20px;
+	height: 20px;
+	border-radius: 100%;
+	background: #00b5e4;
+	margin: 2em 1.5em 2em 2em;
+	animation: bub_pulse 1s infinite;
+	vertical-align: middle;
+	float:left;
+}
+
+#pb_backupbuddy_stats .backupbuddy-currently-message {
+	margin: 1.875em 0;
+	line-height: 1.4;
+}
+
+#pb_backupbuddy_stats .backupbuddy-inline-label {
+	text-transform: uppercase;
+	font-weight: bold;
+	margin: .25em;
+}
+
+@-webkit-keyframes bub_pulse {
+	0%   {-webkit-box-shadow: 0 0 0 0    rgba(0,181,228, 1);-webkit-transform: scale(1.2,1.2);}
+	70%  {-webkit-box-shadow: 0 0 0 10px rgba(0,181,228, 0);}
+	100% {-webkit-box-shadow: 0 0 0 0    rgba(0,181,228, 0);}
+}
+@keyframes bub_pulse {
+	0%   {-moz-box-shadow: 0 0 0 0    rgba(0,181,228, 1);  box-shadow: 0 0 0 0    rgba(0,181,228, 1); -moz-transform: scale(1.2,1.2); transform: scale( 1.2, 1.2 )}
+	70%  {-moz-box-shadow: 0 0 0 10px rgba(0,181,228, 0);    box-shadow: 0 0 0 10px rgba(0,181,228, 0);}
+	100% {-moz-box-shadow: 0 0 0 0    rgba(0,181,228, 0);    box-shadow: 0 0 0 0    rgba(0,181,228, 0);}
+}
+
+#pb_backupbuddy_stats .backupbuddy-live-stats-overview h3 {
+	font-size: 18px;
+	max-width: 320px;
+	padding: 2em 1em;
+	margin: 0 auto;
+	line-height: 1.4;
+	text-align: center;
+}
+
+#pb_backupbuddy_stats .backupbuddy-stats-time-ago {
+	font-weight: bold;
+	text-align: center;
+	font-size: 24px;
+	margin-bottom: 2em;
+}
+
+#pb_backupbuddy_stats .backupbuddy-stats-help-link {
+	text-align: center;
+}
+
+#pb_backupbuddy_stats .backupbuddy-stats-overview-manage-live {
+	border-top: 1px solid #e5e5e5;
+	padding: 1em 0 0 0;
+	margin: 2em 0 0 0;
+}
+
+#pb_backupbuddy_stats .backupbuddy-stats-overview-manage-live a {
+	margin: 1em;
+}
+
+
 .edits-since-wrapper {
 	margin: 0 0 1em 0;
 }

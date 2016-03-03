@@ -77,6 +77,7 @@ class pb_backupbuddy_settings {
 			'default'			=>		'',					// IMPORTANT: Overrides default array. Also useful if savepoint is === false to override.
 			'options'			=>		array(),
 			'orientation'		=>		'horizontal',		// Used by radio and checkboxes. TODO: still need to add to checkboxes.
+			'class'				=>		'',
 			'classes'			=>		'',					// String of additional classes.
 			'row_class'			=>		'',					// Class to apply to row td's in row.
 		);
@@ -104,8 +105,11 @@ class pb_backupbuddy_settings {
 			if ( $savepoint !== false ) {
 				
 				if ( is_array( $savepoint ) ) { // Array of defaults was passed instead of savepoint.
-					$default_value = $savepoint[ $raw_name ];
-					
+					if ( isset( $savepoint[ $raw_name ] ) ) {
+						$default_value = $savepoint[ $raw_name ];
+					} else {
+						$default_value = '';
+					}
 				} else { // No defaults provided, seek them out in plugins options array.
 					
 					// Default values are overwritten after a process() run with the latest data if a form was submitted.
@@ -165,8 +169,11 @@ class pb_backupbuddy_settings {
 			case 'title':
 				$this->_form->title( $settings['name'], $default_value, $settings['rules'] ); // Submit button text is set in display_settings() param.
 				break;
+			case 'html': // Raw HTML to inject at this spot.
+				$this->_form->html( $settings['name'], $settings['html'] );
+				break;
 			default:
-				echo '{Error: Unknown settings type.}';
+				echo '{Error: Unknown settings type `' . $settings['type'] . '`.}';
 				break;
 		} // End switch().
 		
@@ -337,11 +344,11 @@ class pb_backupbuddy_settings {
 			
 			if ( $settings['type'] == 'title' ) { // Title item.
 				if ( $first_title === true ) { // First title in list.
-					$return .= '<tr style="border: 0;"><th colspan="2" style="border: 0; padding-top: 0; padding-bottom: 0;" class="' . $settings['row_class'] . '"><h3 class="title"';
+					$return .= '<tr style="border: 0;"><th colspan="2" style="border: 0; padding-top: 0; padding-bottom: 0;" class="' . $settings['row_class'] . '"><h3 class="title ' . $settings['class'] . '"';
 					$return .= ' style="margin-top: 0; margin-bottom: 0.5em;"';
 					$first_title = false;
 				} else { // Subsequent titles.
-					$return .= '<tr style="border: 0;"><th colspan="2" style="border: 0;" class="' . $settings['row_class'] . '"><h3 class="title"';
+					$return .= '<tr style="border: 0;"><th colspan="2" style="border: 0;" class="' . $settings['row_class'] . '"><h3 class="title ' . $settings['class'] . '"';
 					$return .= ' style="margin: 0.5em 0;"';
 				}
 				
@@ -440,6 +447,3 @@ class pb_backupbuddy_settings {
 	
 } // End class pluginbuddy_settings.
 
-
-
-?>

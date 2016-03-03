@@ -1,5 +1,6 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
 
 /*	remote_send()
 *	
@@ -85,7 +86,7 @@ if ( pb_backupbuddy::$options['remote_destinations'][$destination_id]['type'] ==
 } // end if Stash.
 
 pb_backupbuddy::status( 'details', 'Scheduling cron to send to this remote destination...' );
-$schedule_result = backupbuddy_core::schedule_single_event( time(), pb_backupbuddy::cron_tag( 'remote_send' ), array( $destination_id, $backup_file, pb_backupbuddy::_POST( 'trigger' ), $send_importbuddy, $delete_after ) );
+$schedule_result = backupbuddy_core::schedule_single_event( time(), 'remote_send', array( $destination_id, $backup_file, pb_backupbuddy::_POST( 'trigger' ), $send_importbuddy, $delete_after ) );
 if ( $schedule_result === FALSE ) {
 	$error = 'Error scheduling file transfer. Please check your BackupBuddy error log for details. A plugin may have prevented scheduling or the database rejected it.';
 	pb_backupbuddy::status( 'error', $error );
@@ -93,8 +94,10 @@ if ( $schedule_result === FALSE ) {
 } else {
 	pb_backupbuddy::status( 'details', 'Cron to send to remote destination scheduled.' );
 }
-spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
-update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+if ( '1' != pb_backupbuddy::$options['skip_spawn_cron_call'] ) {
+	update_option( '_transient_doing_cron', 0 ); // Prevent cron-blocking for next item.
+	spawn_cron( time() + 150 ); // Adds > 60 seconds to get around once per minute cron running limit.
+}
 
 // SEE cron.php remote_send() for sending function that we pass to via the cron above.
 

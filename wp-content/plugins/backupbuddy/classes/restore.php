@@ -26,59 +26,81 @@ class backupbuddy_restore {
 		
 		register_shutdown_function( array( &$this, 'shutdown_function' ) );
 		
+		
+		pb_backupbuddy::status( 'details', 'Setting restore state defaults.' );
+		$this->_state = array(
+			'type' => $type,
+			'archive' => '',					// Full archive path & filename.
+			'serial' => '',						// Calculated backup serial.
+			'tempPath' => '',					// Temporary path to do extractions into. Trailing path.
+			'dat' => array(),					// DAT file array.
+			'undoURL' => '',					// URL to the undo script, eg http://your.com/backupbuddy_rollback_undo-XXXXXXXX.php
+			'forceMysqlMethods' => array(),		// mysql methods to force for importing. Default to empty array to auto-detect.
+			'autoAdvance' => true,				// Whether or not to auto advance (ie for web-based rollback auto-refresh to next step).
+			'maxExecutionTime' => backupbuddy_core::detectMaxExecutionTime(),			// If set then override detected max execution time.
+			'dbImportPoint' => 0,				// For compat mode mysql, next row to start importo n.
+			'zipMethodStrategy' => 'all',		//	Zip methods to use. Valid: all, ziparchive, pclzip
+			'restoreFiles' => true,
+			'restoreDatabase' => true,
+			'migrateHtaccess' => true,
+			'databaseSettings' => array(
+									'server' => '',
+									'database' => '',
+									'username' => '',
+									'password' => '',
+									'prefix' => '',
+									'tempPrefix' => '', // Used by deployment to import to a temporary prefix. Migration will migrate data to the real prefix though. Then the db will be swapped out between existing and tempPrefix.
+									'wipePrefix' => false,
+									'renamePrefix' => false, // Temporarily rename existing tables to another prefix for allowing undo of db import.
+									'wipeDatabase' => false,
+									'ignoreSqlErrors' => false,
+									'sqlFiles' => array(),
+									'sqlFilesLocation' => '',
+									'databaseMethodStrategy' => 'php', // Defaults to php due to chunking ability.
+									//'importResumeFiles'=> array(), // IMPORTANT: Leave unset in default. Once set, emptyy array means finished all files.
+									'importResumePoint'=> '', // Current file pointer value (from ftell()) for chunked resumed SQL file import.
+									'importedResumeRows' => 0, // Total number of rows imported thus far when chunking. [INFORMATION ONLY]
+									'importedResumeFails' => 0, // Total number of SQL queries that failed executiong when chunking. [INFORMATION ONLY]
+									'importedResumeTime' => 0, // Total time of actual import when chunking. [INFORMATION ONLY]
+									'migrateDatabase' => true,
+									'migrateDatabaseBruteForce' => true,
+									'migrateResumeSteps' => '',
+									'migrateResumePoint' => '',
+								),
+			'cleanup' => array(					// Step 6 cleanup options.
+				'deleteArchive' => true,
+				'deleteTempFiles' => true,
+				'deleteImportBuddy' => true,
+				'deleteImportLog' => true,
+								),
+			'potentialProblems' => array(),		// Array of potential issues encountered to show the user AFTER import is done.
+			'stepHistory' => array(),			// Array of arrays of the step functions run thus far. Track start and finish times.
+		);
+
+		// Restore-specific default options.
+		if ( 'restore' == $type ) {
+			$this->_state['skipUnzip'] = false;
+			$this->_state['restoreFiles'] = true;
+			$this->_state['restoreDatabase'] = true;
+			$this->_state['migrateHtaccess'] = true;
+			$this->_state['tempPath'] = ABSPATH . 'importbuddy/temp_' . pb_backupbuddy::$options['log_serial'] . '/';
+		} elseif ( 'rollback' == $type ) {
+			$this->_state['tempPath'] = backupbuddy_core::getTempDirectory() . $this->_state['type'] . '_' . $this->_state['serial'] . '/';
+		}
+		
+		
 		if ( is_array( $existingState ) ) { // User passed along an existing state to resume.
 			pb_backupbuddy::status( 'details', 'Using provided restore state data.' );
-			$this->_state = $existingState;
-		} else { // Create new blank rollback process & state.
-			pb_backupbuddy::status( 'details', 'Setting restore state defaults.' );
-			$this->_state = array(
-				'type' => $type,
-				'archive' => '',					// Full archive path & filename.
-				'serial' => '',						// Calculated backup serial.
-				'tempPath' => '',					// Temporary path to do extractions into. Trailing path.
-				'data' => array(),					// DAT file array.
-				'undoURL' => '',					// URL to the undo script, eg http://your.com/backupbuddy_rollback_undo-XXXXXXXX.php
-				'forceMysqlMethods' => array(),		// mysql methods to force for importing. Default to empty array to auto-detect.
-				'autoAdvance' => true,				// Whether or not to auto advance (ie for web-based rollback auto-refresh to next step).
-				'maxExecutionTime' => backupbuddy_core::detectMaxExecutionTime(),			// If set then override detected max execution time.
-				'dbImportPoint' => 0,				// For compat mode mysql, next row to start importo n.
-				'databaseSettings' => array(
-										'server' => '',
-										'database' => '',
-										'username' => '',
-										'password' => '',
-										'prefix' => '',
-										'wipePrefix' => false,
-										'wipeDatabase' => false,
-										'ignoreSqlErrors' => false,
-										'sqlFiles' => array(),
-										'sqlFilesLocation' => '',
-										'databaseMethodStrategy' => 'php', // Defaults to php due to chunking ability.
-										//'importResumeFiles'=> array(), // IMPORTANT: Leave unset in default. Once set, emptyy array means finished all files.
-										'importResumePoint'=> '', // Current file pointer value (from ftell()) for chunked resumed SQL file import.
-										'importedResumeRows' => 0, // Total number of rows imported thus far when chunking. [INFORMATION ONLY]
-										'importedResumeFails' => 0, // Total number of SQL queries that failed executiong when chunking. [INFORMATION ONLY]
-										'importedResumeTime' => 0, // Total time of actual import when chunking. [INFORMATION ONLY]
-										'migrateDatabase' => true,
-										'migrateDatabaseBruteForce' => true,
-										'migrateResumeSteps' => '',
-										'migrateResumePoint' => '',
-									),
-				'potentialProblems' => array(),		// Array of potential issues encountered to show the user AFTER import is done.
-				'stepHistory' => array(),			// Array of arrays of the step functions run thus far. Track start and finish times.
-			);
-
-			// Restore-specific default options.
-			if ( 'restore' == $type ) {
-				$this->_state['skipUnzip'] = false;
-				$this->_state['restoreFiles'] = true;
-				$this->_state['restoreDatabase'] = true;
-				$this->_state['migrateHtaccess'] = true;
-				$this->_state['tempPath'] = ABSPATH . 'importbuddy/temp_' . pb_backupbuddy::$options['log_serial'] . '/';
-			} elseif ( 'rollback' == $type ) {
-				$this->_state['tempPath'] = backupbuddy_core::getTempDirectory() . $this->_state['type'] . '_' . $this->_state['serial'] . '/';
-			}
+			$this->_state = $this->_array_replace_recursive( $this->_state, $existingState );
 		}
+		
+		// Check if a default state override exists.  Used by automated restoring.
+		/*
+		if ( isset( pb_backupbuddy::$options['default_state_overrides'] ) && ( count( pb_backupbuddy::$options['default_state_overrides'] ) > 0 ) ) { // Default state overrides exist. Apply them.
+			$this->_state = array_merge( $this->_state, pb_backupbuddy::$options['default_state_overrides'] );
+		}
+		*/
+		
 		
 		pb_backupbuddy::status( 'details', 'Restore class constructed in `' . $type . '` mode.' );
 		
@@ -148,9 +170,13 @@ class backupbuddy_restore {
 		if ( true === $skipUnzip ) { // Only look for DAT file in filesystem. Zip should be pre-extracted, eg by the user manually.
 			pb_backupbuddy::status( 'details', 'Looking for DAT file in local filesystem (instead of in zip) since advanced skip unzip option set.' );
 			foreach( $possibleDatLocations as $possibleDatLocation ) { // Look for DAT file in filesystem.
+				pb_backupbuddy::status( 'details', 'Does `' . ABSPATH . $possibleDatLocation . '` exist?' );
 				if ( true === file_exists( ABSPATH . $possibleDatLocation ) ) {
+					pb_backupbuddy::status( 'details', 'Yes, exists.' );
 					$detectedDatLocation = $possibleDatLocation;
 					break;
+				} else {
+					pb_backupbuddy::status( 'details', 'No, does not exist.' );
 				}
 			}
 			if ( '' == $detectedDatLocation ) {
@@ -167,7 +193,7 @@ class backupbuddy_restore {
 			} // end foreach.
 		}
 		if ( '' == $detectedDatLocation ) {
-			return $this->_error( 'Unable to determine DAT file location. It may be missing.' );
+			return $this->_error( 'Unable to determine DAT file location. It may be missing OR the backup zip file may be incomplete or corrupted. Verify the backup zip has fully uploaded or re-upload it. You can try manually unzipping then selecting the advanced option to skip unzip.' );
 		}
 		pb_backupbuddy::status( 'details', 'Confirmed DAT file location: `' . $detectedDatLocation . '`.' );
 		$this->_state['datLocation'] = $detectedDatLocation;
@@ -220,8 +246,10 @@ class backupbuddy_restore {
 		}
 		
 		if ( 'rollback' == $this->_state['type'] ) {
-			if ( site_url() != $this->_state['dat']['siteurl'] ) {
-				$this->_error( __( 'Error #5849843: Site URL does not match. You cannot roll back the database if the URL has changed or for backups or another site. Use importbuddy.php to restore or migrate instead.', 'it-l10n-backupbuddy' ) );
+			$this_siteurl = str_replace( 'https://', 'http://', site_url() );
+			$this_siteurldat = str_replace( 'https://', 'http://', $this->_state['dat']['siteurl'] );
+			if ( $this_siteurl != $this_siteurldat ) {
+				$this->_error( __( 'Error #5849843: Site URL does not match. Current Site URL: `' . site_url() . '`. Site URL in backup: `' . $this->_state['dat']['siteurl'] . '`. You cannot roll back the database if the URL has changed or for backups or another site. Use importbuddy.php to restore or migrate instead.', 'it-l10n-backupbuddy' ) );
 				return false;
 			}
 			
@@ -275,9 +303,14 @@ class backupbuddy_restore {
 		pb_backupbuddy::status( 'details', 'Calculating possible SQL file locations.' );
 		$detectedSQLLocation = '';
 		$possibleSQLLocations = array();
+		
 		$possibleSQLLocations[] = trim( rtrim( str_replace( 'backupbuddy_dat.php', '', $this->_state['datLocation'] ), '\\/' ) . '/db_1.sql', '\\/' ); // SQL file most likely is in the same spot the dat file was.
-		$possibleSQLLocations[] = 'db_1.sql'; // DB backup.
+		$possibleSQLLocations[] = 'db_1.sql'; // DB backup. v2.x+
 		$possibleSQLLocations[] = 'wp-content/uploads/backupbuddy_temp/' . $this->_state['serial'] . '/db_1.sql'; // Full backup.
+		
+		$possibleSQLLocations[] = 'db.sql'; // DB backup. v1.x
+		$possibleSQLLocations[] = 'wp-content/uploads/backupbuddy_temp/' . $this->_state['serial'] . '/db.sql'; // Full backup v1.x.
+		
 		pb_backupbuddy::status( 'details', 'Possible SQL file locations: `' . implode( ';', $possibleSQLLocations ) . '`.' );
 		$possibleSQLLocations = array_unique( $possibleSQLLocations );
 		foreach( $possibleSQLLocations as $possibleSQLLocation ) {
@@ -334,12 +367,35 @@ class backupbuddy_restore {
 		foreach( $possible_sql_file_paths as $possible_sql_file_path ) { // Check each file location to see which hits.
 			pb_backupbuddy::status( 'details', 'Looking for SQL files in `' . $possible_sql_file_path . '`.' );
 			$possible_sql_files = glob( $possible_sql_file_path . '*.sql' );
-			if ( is_array( $possible_sql_files ) && ( count( $possible_sql_files ) > 0 ) ) { // Found SQL files here.
-				$this->_state['databaseSettings']['sqlFilesLocation'] = $possible_sql_file_path;
-				$this->_state['databaseSettings']['sqlFiles'] = array_map( 'basename', $possible_sql_files );
-				pb_backupbuddy::status( 'details', 'Found ' . count( $this->_state['databaseSettings']['sqlFiles'] ) . ' SQL files in `' . $possible_sql_file_path . '`.' );
-				break;
+			if ( ! is_array( $possible_sql_files ) || ( 0 == count( $possible_sql_files ) ) ) { // No SQL files here.
+				continue;
 			}
+			
+			// Found directory with SQL files in it.
+			$this->_state['databaseSettings']['sqlFilesLocation'] = $possible_sql_file_path;
+			
+			// Remove path information.
+			$possible_sql_files = array_map( 'basename', $possible_sql_files );
+			
+			// Take SQL files out of list that begin with underscore (BackupBuddy Stash Live timestamped files) to put them at end of the array to play back at the end.
+			$live_sql_files = array();
+			foreach( $possible_sql_files as $index => $sql_file ) {
+				if ( '_' == substr( $sql_file, 0, 1 ) ) {
+					$live_sql_files[] = $sql_file; // Copy into new array.
+					unset( $possible_sql_files[ $index ] ); // Remove from original array.
+				}
+			}
+			
+			// Fix missing indexes of removed items.
+			$possible_sql_files = array_filter( $possible_sql_files );
+			
+			// Append LIVE SQL files to end of normal SQL files list.
+			$possible_sql_files = array_merge( $possible_sql_files, $live_sql_files );
+			
+			$this->_state['databaseSettings']['sqlFiles'] = $possible_sql_files;
+			pb_backupbuddy::status( 'details', 'Found ' . count( $this->_state['databaseSettings']['sqlFiles'] ) . ' SQL files in `' . $possible_sql_file_path . '`.' );
+			break;
+			
 		} // End foreach().
 		unset( $possible_sql_file_paths );
 		
@@ -361,9 +417,10 @@ class backupbuddy_restore {
 	 * ROLLBACK, RESTORE
 	 * Renames existing tables then imports the database SQL data into mysql. Turns on maintenance mode during this.
 	 *
-	 * @return	bool|int		true on success, false on failure, OR integer number for resume number for continuing db import.
+	 8 @param	string		$overridePrefix		If not empty string then use this db prefix insead of the one set in the state data.
+	 * @return	bool|array						true on success, false on failure, OR array if chunking needed for DB continuation. chunks mid-db table import and/or for each individual .sql file. depends on method, runtime left, etc. see mysqlbuddy for chunking details.
 	 */
-	public function restoreDatabase() {
+	public function restoreDatabase( $overridePrefix = '' ) {
 		$this->_before( __FUNCTION__ );
 		global $wpdb;
 		
@@ -379,10 +436,19 @@ class backupbuddy_restore {
 			$this->_state['databaseSettings']['username'] = DB_USER;
 			$this->_state['databaseSettings']['password'] = DB_PASSWORD;
 			
-			$this->_state['databaseSettings']['prefix'] = 'BBnew-' . $this->_state['serial'] . '_';
+			$this->_state['databaseSettings']['prefix'] = 'bbnew-' . substr( $this->_state['serial'], 0, 4 ) . '_';
 			
 			$forceMysqlMethods = array( pb_backupbuddy::$options['database_method_strategy'] );
 		}
+		
+		
+		// Allow overriding prefix in parameters.
+		if ( '' == $overridePrefix ) {
+			$importPrefix = $this->_state['databaseSettings']['prefix'];
+		} else {
+			$importPrefix = $overridePrefix;
+		}
+		
 		
 		
 		// Determine database strategy.
@@ -403,8 +469,10 @@ class backupbuddy_restore {
 		
 		// Initialize mysqlbuddy.
 		require_once( pb_backupbuddy::plugin_path() . '/lib/mysqlbuddy/mysqlbuddy.php' );
-		pb_backupbuddy::$classes['mysqlbuddy'] = new pb_backupbuddy_mysqlbuddy( $this->_state['databaseSettings']['server'], $this->_state['databaseSettings']['database'], $this->_state['databaseSettings']['username'], $this->_state['databaseSettings']['password'], $this->_state['databaseSettings']['prefix'], $forceMysqlMethods, $this->_state['maxExecutionTime'] ); // $database_host, $database_name, $database_user, $database_pass, $old_prefix, $force_method = array()
-		
+		pb_backupbuddy::$classes['mysqlbuddy'] = new pb_backupbuddy_mysqlbuddy( $this->_state['databaseSettings']['server'], $this->_state['databaseSettings']['database'], $this->_state['databaseSettings']['username'], $this->_state['databaseSettings']['password'], $importPrefix, $forceMysqlMethods, $this->_state['maxExecutionTime'] ); // $database_host, $database_name, $database_user, $database_pass, $old_prefix, $force_method = array()
+		if ( isset( $this->_state['dat']['db_version'] ) ) {
+			pb_backupbuddy::$classes['mysqlbuddy']->set_incoming_sql_version( $this->_state['dat']['db_version'] ); // Tell mysqlbuddy the version of the incoming SQL file's mysql.
+		}
 		
 		// Restore each SQL file as its own page load.
 		if ( !isset( $this->_state['databaseSettings']['importResumeFiles'] ) ) { // First pass so populate list of SQL files needing imported.
@@ -413,21 +481,29 @@ class backupbuddy_restore {
 		$filesRemaining = $this->_state['databaseSettings']['importResumeFiles'];
 		pb_backupbuddy::status( 'details', 'SQL files to import: ' . count( $filesRemaining ) );
 		foreach( $filesRemaining as $sql_file ) {
-			pb_backupbuddy::status( 'details', 'Importing SQL file `' . basename( $sql_file ) . '`.' );
+			$full_file = $this->_state['databaseSettings']['sqlFilesLocation'] . $sql_file;
+			pb_backupbuddy::status( 'details', 'Importing SQL file `' . basename( $sql_file ) . '` (size: ' . pb_backupbuddy::$format->file_size( @filesize( $full_file ) ) . ').' );
 			// Tell mysqlbuddy to IMPORT the SQL file.
-			$import_result = pb_backupbuddy::$classes['mysqlbuddy']->import( $this->_state['databaseSettings']['sqlFilesLocation'] . $sql_file, $oldPrefix = $this->_state['dat']['db_prefix'], $this->_state['databaseSettings']['importResumePoint'], $this->_state['databaseSettings']['ignoreSqlErrors'] );
-			
+			$import_result = pb_backupbuddy::$classes['mysqlbuddy']->import( $full_file, $oldPrefix = $this->_state['dat']['db_prefix'], $this->_state['databaseSettings']['importResumePoint'], $this->_state['databaseSettings']['ignoreSqlErrors'] );
 			
 			if ( FALSE === $import_result ) {
 				$this->_error( 'Error #953834: Problem importing database. See status log above for details.' );
 				return false;
 			} elseif ( TRUE === $import_result ) { // Success on this SQL file.
-				pb_backupbuddy::status( 'details', 'Finished importing SQL file `' . basename( $sql_file ) . '`.' );
 				if ( '' != $this->_state['databaseSettings']['importResumePoint'] ) { // Chunking was used. Give some stats.
 					pb_backupbuddy::status( 'details', 'Chunking imported `' . $this->_state['databaseSettings']['importedResumeRows'] . '` rows in `' . round( $this->_state['databaseSettings']['importedResumeTime'], 3 ) . '` seconds. `' . $this->_state['databaseSettings']['importedResumeFails'] . '` SQL query failures.' );
 				}
+				
 				array_shift( $this->_state['databaseSettings']['importResumeFiles'] ); // Finished this table so take it off the stack.
-				return array(); // Any array returned here results in resuming using the latest state data. sqlFilesRemaning is what we care about keeping up to date on which file to do.
+				
+				// Reset chunking data since this file is finished.
+				$this->_state['databaseSettings']['importResumePoint'] = '';
+				$this->_state['databaseSettings']['importedResumeRows'] = 0;
+				$this->_state['databaseSettings']['importedResumeFails'] = 0;
+				$this->_state['databaseSettings']['importedResumeTime'] = 0;
+				
+				pb_backupbuddy::status( 'details', 'Finished importing SQL file `' . basename( $sql_file ) . '`. Database files remaining: ' . count( $this->_state['databaseSettings']['importResumeFiles'] ) );
+				// NOTE: As of v7 no longer chunking per SQL file to make better use of time for new Live small sql files. WAS: return array(); // Any array returned here results in resuming using the latest state data. sqlFilesRemaning is what we care about keeping up to date on which file to do.
 			} else { // Resumed chunking needed.
 				if ( ! is_array( $import_result ) ) {
 					pb_backupbuddy::status( 'error', 'Error #93484: Expected array. Got: `' . $import_result . '`.' );
@@ -443,13 +519,60 @@ class backupbuddy_restore {
 				}
 			}
 			
-			
-		}
+		} // end foreach.
 		
 		pb_backupbuddy::status( 'details', 'Database restore finished importing all SQL files.' );
 		return true;
 	} // End restoreDatabase().
 	
+	
+	
+	/**
+	 * Copies BUB settings from old options table over to new options table
+	 * This function is not currently called if the options table was not included in the backup
+	 */
+	public function swapDatabaseBBSettings() {
+		$this->_before( __FUNCTION__ );
+		
+		if ( 'deploy' != $this->_state['type'] ) {
+			return $this->_error( 'This restore type `' . $this->_state['type'] . '` does not support this operation.' );
+		}
+		
+		// Calculate temporary table prefixes.
+		$newPrefix = 'bbnew-' . substr( $this->_state['serial'], 0, 4 ) . '_' . $this->_state['databaseSettings']['prefix']; // Incoming site.
+		$oldPrefix = $this->_state['databaseSettings']['prefix']; // Current live site prefix.
+		
+		global $wpdb;
+		
+		// Get current BackupBuddy settings for current site.
+		pb_backupbuddy::status( 'details', 'Copying BackupBuddy settings from options table prefixed with `' . $oldPrefix . '` to `' . $newPrefix . '`.' );
+		$sql = "SELECT option_value FROM `{$oldPrefix}options` WHERE option_name='pb_backupbuddy';";
+		$results = $wpdb->get_results( $sql, ARRAY_A );
+		if ( 0 == count( $results ) ) {
+			return $this->_error( 'Error #8447347: Error getting current BackupBuddy settings. SQL Query: ' . htmlentities( $sql ) );
+		}
+		
+		// Overwrite incoming site BackupBuddy settings in its temp table.
+		if ( false === $wpdb->query( "UPDATE `{$newPrefix}options` SET option_value='" . backupbuddy_core::dbEscape( $results[0]['option_value'] ) . "' WHERE option_name='pb_backupbuddy';" ) ) {
+			return $this->_error( 'Error #372837683: Unable to copy over BackupBuddy settings from live site to incoming database in temp table. Details: `' . $wpdb->last_error . '`.' );
+		}
+		
+		// Get current iThemes Licensing for current site (if any).
+		pb_backupbuddy::status( 'details', 'Copying iThemes Licensing data from options table prefixed with `' . $oldPrefix . '` to `' . $newPrefix . '`.' );
+		$sql = "SELECT option_value FROM `{$oldPrefix}options` WHERE option_name='ithemes-updater-keys';";
+		$results = $wpdb->get_results( $sql, ARRAY_A );
+		if ( count( $results ) > 0 ) {
+			// Overwrite incoming site BackupBuddy settings in its temp table.
+			if ( false === $wpdb->query( "UPDATE `{$newPrefix}options` SET option_value='" . backupbuddy_core::dbEscape( $results[0]['option_value'] ) . "' WHERE option_name='ithemes-updater-keys';" ) ) {
+				pb_backupbuddy::status( 'error', 'Error #2379332: Unable to copy over iThemes Licenses from live site to incoming database in temp table. Details: `' . $wpdb->last_error . '`.' );
+			} else {
+				pb_backupbuddy::status( 'details', 'Maintained licensing data by copying it over incoming database.' );
+			}
+		}
+		
+		return true;
+		
+	} // End swapDatabaseBBSettings().
 	
 	
 	/* swapDatabases()
@@ -462,8 +585,8 @@ class backupbuddy_restore {
 	public function swapDatabases() {
 		$this->_before( __FUNCTION__ );
 		
-		if ( 'rollback' != $this->_state['type'] ) {
-			$this->_error( 'This restore type does not support this operation.' );
+		if ( ( 'rollback' != $this->_state['type'] ) && ( 'deploy' != $this->_state['type'] ) ) { // Restore mode used for restorying during deployment.
+			$this->_error( 'This restore type `' . $this->_state['type'] . '` does not support this operation.' );
 			return false;
 		}
 		
@@ -476,8 +599,8 @@ class backupbuddy_restore {
 		global $wpdb;
 		
 		// Calculate temporary table prefixes.
-		$newPrefix = 'BBnew-' . $this->_state['serial'] . '_'; // Temp prefix for holding the NEWly imported data.
-		$oldPrefix = 'BBold-' . $this->_state['serial'] . '_'; // Temp prefix for holding the OLD (currently live) data.
+		$newPrefix = 'bbnew-' . substr( $this->_state['serial'], 0, 4 ) . '_'; // Temp prefix for holding the NEWly imported data.
+		$oldPrefix = 'bbold-' . substr( $this->_state['serial'], 0, 4 ) . '_'; // Temp prefix for holding the OLD (currently live) data.
 		
 		// Get newly imported tables with the temp prefix.
 		pb_backupbuddy::status( 'details', 'Checking for newly imported rollback tables with temp prefix `' . $newPrefix . '`.' );
@@ -492,29 +615,38 @@ class backupbuddy_restore {
 		// Rename newly imported tables with temp prefix, renaming the existing live table first.
 		pb_backupbuddy::status( 'details', 'Rename all existing tables with this temp prefix to prefix `' . $wpdb->prefix . '`.' );
 		foreach( $results as $result ) {
+			
 			$newTableName = str_replace( $newPrefix, '', $wpdb->prefix . $result['table_name'] ); // the target new table name we are importing.
 			$oldTableName = $oldPrefix . $newTableName; // the target name for the old table where we hold it in case it needs undoing.
 			
-			// Rename live prefix to temp old prefix for possible undo (if exists).
-			pb_backupbuddy::status( 'details', 'Renaming table `' . $newTableName . '` (if exists) to `' . $oldTableName . '`.' );
-			if ( false === $wpdb->query( "RENAME TABLE `" . backupbuddy_core::dbEscape( $newTableName ) . "` TO `" . backupbuddy_core::dbEscape( $oldTableName ) . "`;" ) ) {
-				$this->_error( 'Error #844389a: Unable to rename table `' . $newTableName . '` to `' . $oldTableName . '`. Details: `' . $wpdb->last_error . '`.' );
-				return false;
+			// Check if existing site already had this table. If so then we will need to rename it to a temp table name to allow for undoing.
+			$sql = "SHOW TABLES LIKE '" . backupbuddy_core::dbEscape( $newTableName ) . "';";
+			pb_backupbuddy::status( 'details', 'SQL: `' . $sql . '`.' );
+			$results = $wpdb->get_results( $sql, ARRAY_A );
+			if ( count( $results ) > 0 ) { // This table existed in the existing site so it needs to be renamed.
+				pb_backupbuddy::status( 'details', 'Renaming table `' . $newTableName . '` (already exists in this site) to `' . $oldTableName . '`.' );
+				if ( false === $wpdb->query( "RENAME TABLE `" . backupbuddy_core::dbEscape( $newTableName ) . "` TO `" . backupbuddy_core::dbEscape( $oldTableName ) . "`;" ) ) {
+					$this->_error( 'Error #844389a: Unable to rename table `' . $newTableName . '` to `' . $oldTableName . '`. Details: `' . $wpdb->last_error . '`.' );
+					return false;
+				}
+			} else {
+				pb_backupbuddy::status( 'details', 'Table `' . $newTableName . '` did not already exist so NOT renaming to `' . $oldTableName . '`.' );
 			}
 			
 			// Rename imported table to live prefix.
-			pb_backupbuddy::status( 'details', 'Renaming table `' . $result['table_name'] . '` to `' . $newTableName . '`.' );
+			pb_backupbuddy::status( 'details', 'Renaming incoming table `' . $result['table_name'] . '` to `' . $newTableName . '`.' );
 			if ( false === $wpdb->query( "RENAME TABLE `" . backupbuddy_core::dbEscape( $result['table_name'] ) . "` TO `" . backupbuddy_core::dbEscape( $newTableName ) . "`;" ) ) {
 				$this->_error( 'Error #844389b: Unable to rename table `' . $result['table_name'] . '` to `' . $newTableName . '`. Details: `' . $wpdb->last_error . '`.' );
 				return false;
 			}
-		}
+			
+		} // end foreach.
 		
 		// Turn off maintenance mode.
 		$this->maintenanceOff();
 		
 		return true;
-	}
+	} // End
 	
 	
 	
@@ -529,7 +661,7 @@ class backupbuddy_restore {
 		$this->_before( __FUNCTION__ );
 		
 		global $wpdb;
-		$sql = "SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'BBold-" . $this->_state['serial'] . "\_%' AND table_schema = DATABASE()";
+		$sql = "SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'bbold-" . substr( $this->_state['serial'], 0, 4 ) . "\_%' AND table_schema = DATABASE()";
 		//echo $sql;
 		$results = $wpdb->get_results( $sql, ARRAY_A );
 		pb_backupbuddy::status( 'details', 'Found ' . count( $results ) . ' tables to drop.' );
@@ -596,10 +728,12 @@ class backupbuddy_restore {
 		pb_backupbuddy::status( 'details', 'Checking for any prior failed rollback data to clean up.' );
 		global $wpdb;
 		
+		$shortSerial = substr( $this->_state['serial'], 0, 4 );
+		
 		// NEW prefix
-		$sql = "SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'BBnew-" . $this->_state['serial'] . "\_%' AND table_schema = DATABASE()";
+		$sql = "SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'bbnew-" . $shortSerial . "\_%' AND table_schema = DATABASE()";
 		$results = $wpdb->get_results( $sql, ARRAY_A );
-		pb_backupbuddy::status( 'details', 'Found ' . count( $results ) . ' tables to drop with the prefix `BBnew-' . $this->_state['serial'] . '_`.' );
+		pb_backupbuddy::status( 'details', 'Found ' . count( $results ) . ' tables to drop with the prefix `bbnew-' . $shortSerial . '_`.' );
 		$dropCount = 0;
 		foreach( $results as $result ) {
 			if ( false === $wpdb->query( "DROP TABLE `" . backupbuddy_core::dbEscape( $result['table_name'] ) . "`" ) ) {
@@ -611,9 +745,9 @@ class backupbuddy_restore {
 		pb_backupbuddy::status( 'details', 'Dropped `' . $dropCount . '` new tables.' );
 		
 		// OLD prefix
-		$sql = "SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'BBold-" . $this->_state['serial'] . "\_%' AND table_schema = DATABASE()";
+		$sql = "SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'bbold-" . $shortSerial . "\_%' AND table_schema = DATABASE()";
 		$results = $wpdb->get_results( $sql, ARRAY_A );
-		pb_backupbuddy::status( 'details', 'Found ' . count( $results ) . ' tables to drop with the prefix `BBold-' . $this->_state['serial'] . '_`.' );
+		pb_backupbuddy::status( 'details', 'Found ' . count( $results ) . ' tables to drop with the prefix `bbold-' . $shortSerial . '_`.' );
 		$dropCount = 0;
 		foreach( $results as $result ) {
 			if ( false === $wpdb->query( "DROP TABLE `" . backupbuddy_core::dbEscape( $result['table_name'] ) . "`" ) ) {
@@ -640,7 +774,7 @@ class backupbuddy_restore {
 		// Turn on maintenance mode.
 		pb_backupbuddy::status( 'details', 'Turning on maintenance mode on.' );
 		if ( ! file_exists( ABSPATH . '.maintenance' ) ) {
-			$maintenance_result = @file_put_contents( ABSPATH . '.maintenance', "<?php die( 'Site undergoing maintenance.' ); ?>" );
+			$maintenance_result = @file_put_contents( ABSPATH . '.maintenance', "<?php header('HTTP/1.1 503 Service Temporarily Unavailable'); header('Status: 503 Service Temporarily Unavailable'); header('Retry-After: 3600'); die( 'Site undergoing maintenance.' );" );
 			if ( false === $maintenance_result ) {
 				$this->_error( '.maintenance file unable to be generated to prevent viewing.' );
 				return false;
@@ -679,7 +813,7 @@ class backupbuddy_restore {
 				if ( false === $maintenance_contents ) { // Cannot read.
 					pb_backupbuddy::status( 'error', '.maintenance file unreadable. You may need to manually delete it to view your site.' );
 				} else { // Read file succeeded.
-					if ( trim( $maintenance_contents ) == "<?php die( 'Site undergoing maintenance.' ); ?>" ) { // Our file. Delete it!
+					if ( trim( $maintenance_contents ) == "<?php header('HTTP/1.1 503 Service Temporarily Unavailable'); header('Status: 503 Service Temporarily Unavailable'); header('Retry-After: 3600'); die( 'Site undergoing maintenance.' );" ) { // Our file. Delete it!
 						$maintenance_unlink = @unlink( ABSPATH . '.maintenance' );
 						if ( true === $maintenance_unlink ) {
 							pb_backupbuddy::status( 'details', 'Temporary .maintenance file created by ImportBuddy successfully deleted.' );
@@ -785,7 +919,7 @@ class backupbuddy_restore {
 			$replace[4] = "define( 'DB_PASSWORD', '" . $this->_preg_escape_back( $this->_state['databaseSettings']['password'] ) . "' );";
 			$pattern[5] = '/define\([\s]*(\'|")DB_HOST(\'|"),[\s]*(\'|")(.)*(\'|")[\s]*\);/i';
 			$replace[5] = "define( 'DB_HOST', '" . $this->_state['databaseSettings']['server'] . "' );";
-
+			
 			// If multisite, update domain.
 			if ( isset( pb_backupbuddy::$options['domain'] ) && ( pb_backupbuddy::$options['domain'] != '' ) ) {
 				$pattern[6] = '/define\([\s]*(\'|")DOMAIN_CURRENT_SITE(\'|"),[\s]*(\'|")(.)*(\'|")[\s]*\);/i';
@@ -801,7 +935,19 @@ class backupbuddy_restore {
 			*/
 			$pattern[7] = '/\$table_prefix[\s]*=[\s]*(\'|")(.)*(\'|");/i';
 			$replace[7] = '$table_prefix = \'' . $this->_state['databaseSettings']['prefix'] . '\';';
-
+			
+			if ( isset( $this->_state['dat']['wp_content_url'] ) ) {
+				$new_content_url = str_replace( trim( $this->_state['dat']['siteurl'], '\\/' ), trim( $this->_state['siteurl'], '/' ), $this->_state['dat']['wp_content_url'] );
+				$pattern[8] = '/define\([\s]*(\'|")WP_CONTENT_URL(\'|"),[\s]*(\'|")(.)*(\'|")[\s]*\);/i';
+				$replace[8] = "define( 'WP_CONTENT_URL', '" . $new_content_url . "' );";
+				pb_backupbuddy::status( 'details', 'wp-config.php: Setting WP_CONTENT_URL (if applicable) to `' . $new_content_url . '`.' );
+			}
+			if ( isset( $this->_state['dat']['wp_content_dir'] ) ) {
+				$new_content_dir = str_replace( $this->_state['dat']['abspath'], ABSPATH, $this->_state['dat']['wp_content_dir'] );
+				$pattern[9] = '/define\([\s]*(\'|")WP_CONTENT_DIR(\'|"),[\s]*(\'|")(.)*(\'|")[\s]*\);/i';
+				$replace[9] = "define( 'WP_CONTENT_DIR', '" . $new_content_dir . "' );";
+				pb_backupbuddy::status( 'details', 'wp-config.php: Setting WP_CONTENT_DIR (if applicable) to `' . $new_content_dir . '`.' );
+			}
 
 			// Perform the actual replacement.
 			$lines = preg_replace( $pattern, $replace, $lines );
@@ -891,7 +1037,11 @@ class backupbuddy_restore {
 				if ( false === $config_contents ) { // Unable to open.
 					pb_backupbuddy::status( 'error', 'Unable to open wp-config.php for checking though it exists. Verify permissions.' );
 				} else { // Able to open.
-
+					$new_content_url = '';
+					if ( isset( $this->_state['dat']['wp_content_url'] ) ) {
+						$new_content_url = str_replace( trim( $this->_state['dat']['siteurl'], '\\/' ), trim( $this->_state['siteurl'], '/' ), $this->_state['dat']['wp_content_url'] );
+					}
+					
 					preg_match_all( '#\bhttps?://[^\s()<>]+(?:\([\w\d]+\)|([^[:punct:]\s]|/))#', $config_contents, $matches );
 					$matches = $matches[0];
 					foreach( $matches as $match ) {
@@ -899,6 +1049,9 @@ class backupbuddy_restore {
 							continue;
 						}
 						if ( false !== stristr( $match, 'codex.wordpress.org' ) ) {
+							continue;
+						}
+						if ( $match == $new_content_url ) { // Ignore new WP_CONTENT_URL define that was updated.
 							continue;
 						}
 						$trouble[] = 'A URL found in one or more locations in wp-config.php was not migrated as it was either not recognized or in an unrecognized location in the file: "' . htmlentities( $match ) . '".';
@@ -917,7 +1070,7 @@ class backupbuddy_restore {
 		} else { // Exists, check if AddHandler inside.
 			$contents = @file_get_contents( ABSPATH . '.htaccess' );
 			if ( strstr( $contents, 'AddHandler' ) ) {
-				$trouble[] = 'Warning: An AddHandler directive has been found in your .htaccess file. This could result in WordPress and PHP not running properly if configured improperly, especially when migrating to a new server. If you encounter problems such as an Internal Server Error or Error 500, try removing this line from your .htaccess file. Solution: Delete this AddHandler line from the .htaccess file. <a target="_new" href="http://ithemes.com/codex/page/BackupBuddy:_Frequent_Support_Issues#.htaccess_404_.2F_Addhandler_Warning">Click here for more information & help.</a>';
+				$trouble[] = 'Warning: An AddHandler directive has been found in your .htaccess file. This could result in WordPress and PHP not running properly if configured improperly, especially when migrating to a new server. If you encounter problems such as an Internal Server Error or Error 500, try removing this line from your .htaccess file. Solution: Delete this AddHandler line from the .htaccess file. <a target="_blank" href="http://ithemes.com/codex/page/BackupBuddy:_Frequent_Support_Issues#.htaccess_404_.2F_Addhandler_Warning">Click here for more information & help.</a>';
 			}
 		}
 
@@ -951,13 +1104,13 @@ class backupbuddy_restore {
 		foreach( $indexFiles as $indexFile ) {
 			if ( file_exists( ABSPATH . $indexFile ) ) {
 				pb_backupbuddy::status( 'details', $indexFile . ' file exists. Checking to see if ImportBuddy generated it or it is empty.' );
-				$index_contents = @file_get_contents( ABSPATH . 'index.htm' );
+				$index_contents = @file_get_contents( ABSPATH . $indexFile );
 				if ( false === $index_contents ) { // Cannot read.
 					pb_backupbuddy::status( 'error', $indexFile . ' file unreadable. You may need to manually delete it to view your site.' );
 				} else { // Read file succeeded.
 					$index_contents = trim( $index_contents );
 					if ( ( $index_contents == '<html></html>' ) || ( '' == $index_contents ) ) { // Our file. Delete it!
-						$index_unlink = @unlink( ABSPATH . 'index.htm' );
+						$index_unlink = @unlink( ABSPATH . $indexFile );
 						if ( true === $index_unlink ) {
 							pb_backupbuddy::status( 'details', $indexFile . ' file successfully deleted.' );
 						} else {
@@ -1010,18 +1163,22 @@ class backupbuddy_restore {
 	function renameHtaccessTempBack() {
 		$this->_before( __FUNCTION__ );
 		
-		if ( !file_exists( ABSPATH . '.htaccess.bb_temp' ) ) {
+		$tempFile = ABSPATH . '.htaccess.bb_temp';
+		$finalFile = ABSPATH . '.htaccess';
+		
+		if ( ! file_exists( $tempFile ) ) {
 			pb_backupbuddy::status( 'details', 'No `.htaccess.bb_temp` file found. Skipping temporary file rename.' );
+			return;
 		}
 
-		$result = @rename( ABSPATH . '.htaccess.bb_temp', ABSPATH . '.htaccess' );
+		$result = @rename( $tempFile, $finalFile );
 		if ( $result === true ) { // Rename succeeded.
 			pb_backupbuddy::status( 'message', 'Renamed `.htaccess.bb_temp` file to `.htaccess` until final ImportBuddy step.' );
 		} else { // Rename failed.
-			pb_backupbuddy::status( 'error', 'Unable to rename `.htaccess.bb_temp` file to `.htaccess`. Your file permissions may be too strict. You may wish to manually rename this file and/or check permissions before proceeding.' );
+			pb_backupbuddy::status( 'error', 'Unable to rename `.htaccess.bb_temp` file to `.htaccess`. Your file permissions may be too strict. You may wish to manually rename .htaccess.bb_temp at `' . $tempFile . '` to .htaccess.' );
 		}
 		
-		return true;
+		return;
 	} // End renameHtaccessTempBack().
 	
 	
@@ -1219,6 +1376,36 @@ class backupbuddy_restore {
 		global $wpdb;
 		$wpdb = new wpdb( $this->_state['databaseSettings']['username'], $this->_state['databaseSettings']['password'], $this->_state['databaseSettings']['database'],$this->_state['databaseSettings']['server'] );
 		
+		// See if we have a specified character set and collation to use from the source site.
+		$charset = null;
+		$collate = null;
+		if ( isset( $this->_state['dat']['db_charset'] ) ) {
+			$charset = $this->_state['dat']['db_charset'];
+		}
+		if ( isset( $this->_state['dat']['db_collate'] ) ) {
+			$collate = $this->_state['dat']['db_collate'];
+		}
+		if ( ( null !== $charset ) || ( null !== $collate ) ) {
+			pb_backupbuddy::status( 'details', 'Setting charset to `' . $charset . '` and collate to `' . $collate . '` based on source site.' );
+			$wpdb->set_charset( $wpdb->dbh, $charset, $collate );
+		} else {
+			pb_backupbuddy::status( 'details', 'Charset nor collate are in DAT file. Using defaults for database connection.' );
+			pb_backupbuddy::status( 'details', 'Charset in wpdb: ' . $wpdb->charset );
+		}
+		
+		// Warn if mysql versions are incompatible; eg importing a mysql < 5.1 version into a server running 5.1+.
+		global $wpdb;
+		$thisVersion = $wpdb->db_version();
+		if ( isset( $this->_state['dat']['db_version'] ) ) {
+			$incomingVersion = $this->_state['dat']['db_version'];
+			pb_backupbuddy::status( 'details', 'Incoming mysql version: `' . $incomingVersion . '`. This server\'s mysql version: `' . $thisVersion . '`.' );
+			if ( version_compare( $incomingVersion, '5.1.0', '<' ) && version_compare( $thisVersion, '5.1.0', '>=' ) ) {
+				pb_backupbuddy::status( 'warning', 'Error #7001: This server\'s mysql version, `' . $thisVersion . '` may have SQL query incompatibilities with the backup mysql version `' . $incomingVersion . '`. This may result in #9010 errors due to syntax of TYPE= changing to ENGINE=. If none occur you may ignore this error.' );
+			}
+		} else {
+			pb_backupbuddy::status( 'details', 'Incoming mysql version: `Unknown`. This server\'s mysql version: `' . $thisVersion . '`.' );
+		}
+		
 		return true;
 	} // End connectDatabase().
 	
@@ -1316,6 +1503,46 @@ class backupbuddy_restore {
 		pb_backupbuddy::status( 'error', 'FATAL PHP ERROR: ' . $e_string );
 		
 	} // End shutdown_function.
+	
+	
+	
+	function _array_replace_recursive($array, $array1) {
+		function recurse($array, $array1)
+		{
+		  foreach ($array1 as $key => $value)
+		  {
+		    // create new key in $array, if it is empty or not an array
+		    if (!isset($array[$key]) || (isset($array[$key]) && !is_array($array[$key])))
+		    {
+		      $array[$key] = array();
+		    }
+
+		    // overwrite the value in the base array
+		    if (is_array($value))
+		    {
+		      $value = recurse($array[$key], $value);
+		    }
+		    $array[$key] = $value;
+		  }
+		  return $array;
+		}
+
+		// handle the arguments, merge one by one
+		$args = func_get_args();
+		$array = $args[0];
+		if (!is_array($array))
+		{
+		  return $array;
+		}
+		for ($i = 1; $i < count($args); $i++)
+		{
+		  if (is_array($args[$i]))
+		  {
+		    $array = recurse($array, $args[$i]);
+		  }
+		}
+		return $array;
+	}
 	
 	
 	

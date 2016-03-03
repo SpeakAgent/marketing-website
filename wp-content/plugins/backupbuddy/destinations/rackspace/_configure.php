@@ -2,7 +2,7 @@
 
 $default_name = NULL;
 if ( 'add' == $mode ) {
-	$default_name = 'My Rackspace';
+	$default_name = 'My Rackspace Cloud Files';
 }
 $settings_form->add_setting( array(
 	'type'		=>		'text',
@@ -57,6 +57,17 @@ $settings_form->add_setting( array(
 	'after'		=>		' backups',
 ) );
 
+
+
+$settings_form->add_setting( array(
+	'type'		=>		'title',
+	'name'		=>		'advanced_begin',
+	'title'		=>		'<span class="dashicons dashicons-arrow-right"></span> ' . __( 'Advanced Options', 'it-l10n-backupbuddy' ),
+	'row_class'	=>		'advanced-toggle-title',
+) );
+
+
+
 $settings_form->add_setting( array(
 	'type'		=>		'select',
 	'name'		=>		'server',
@@ -66,6 +77,18 @@ $settings_form->add_setting( array(
 								'https://lon.auth.api.rackspacecloud.com'		=>		'UK',
 							),
 	'rules'		=>		'required',
+	'row_class'	=>		'advanced-toggle',
+) );
+
+$settings_form->add_setting( array(
+	'type'		=>		'checkbox',
+	'name'		=>		'service_net',
+	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
+	'title'		=>		__( 'Use internal service net', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Default: unchecked] - When checked, BackupBuddy will connect to Rackspace using the internal Service Net (prefixes the host with `snet-`).  If you are hosting within Rackspace this may prevent external bandwidth charges.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'',
+	'rules'		=>		'',
+	'row_class'	=>		'advanced-toggle',
 ) );
 
 
@@ -78,5 +101,17 @@ if ( $mode !== 'edit' ) {
 		'tip'		=>		__( '[Default: unchecked] - When checked, selecting this destination disables browsing or accessing files stored at this destination from within BackupBuddy.', 'it-l10n-backupbuddy' ),
 		'css'		=>		'',
 		'rules'		=>		'',
+		'row_class'	=>		'advanced-toggle',
 	) );
 }
+$settings_form->add_setting( array(
+	'type'		=>		'checkbox',
+	'name'		=>		'disabled',
+	'options'	=>		array( 'unchecked' => '0', 'checked' => '1' ),
+	'title'		=>		__( 'Disable destination', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Default: unchecked] - When checked, this destination will be disabled and unusable until re-enabled. Use this if you need to temporary turn a destination off but don\t want to delete it.', 'it-l10n-backupbuddy' ),
+	'css'		=>		'',
+	'after'		=>		'<span class="description"> ' . __('Check to disable this destination until re-enabled.', 'it-l10n-backupbuddy' ) . '</span>',
+	'rules'		=>		'',
+	'row_class'	=>		'advanced-toggle',
+) );

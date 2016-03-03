@@ -3,7 +3,7 @@
 if ( ! current_user_can( pb_backupbuddy::$options['role_access'] ) ) {
 	die( 'Error #473623. Access Denied.' );
 }
-//pb_backupbuddy::verify_nonce();
+pb_backupbuddy::verify_nonce();
 
 $nextStep = 3;
 

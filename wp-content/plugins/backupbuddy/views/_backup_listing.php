@@ -11,12 +11,12 @@ $backup_directory = backupbuddy_core::getBackupDirectory(); // Normalize for Win
 $backup_directory = str_replace( '\\', '/', $backup_directory );
 $backup_directory = rtrim( $backup_directory, '/\\' ) . '/'; // Enforce single trailing slash.
 if ( ( $listing_mode != 'restore_files' ) && ( FALSE !== stristr( $backup_directory, ABSPATH ) ) ) {
-	$hover_actions[pb_backupbuddy::ajax_url( 'download_archive' ) . '&backupbuddy_backup='] = __( 'Download', 'it-l10n-backupbuddy' );
+	$hover_actions[pb_backupbuddy::ajax_url( 'download_archive' ) . '&backupbuddy_backup='] = '<span class="dashicons dashicons-download"></span> ' . __( 'Download', 'it-l10n-backupbuddy' );
 }
 
 
 if ( $listing_mode == 'restore_files' ) {
-	$hover_actions[pb_backupbuddy::ajax_url( 'download_archive' ) . '&zip_viewer='] = __( 'Browse & Restore Files', 'it-l10n-backupbuddy' );
+	$hover_actions[pb_backupbuddy::ajax_url( 'download_archive' ) . '&zip_viewer='] = '<span class="dashicons dashicons-visibility"></span> ' . __( 'Browse & Restore Files', 'it-l10n-backupbuddy' );
 	$hover_actions['note'] = __( 'Note', 'it-l10n-backupbuddy' );
 	$bulk_actions = array();
 }
@@ -24,19 +24,19 @@ if ( $listing_mode == 'restore_files' ) {
 
 if ( $listing_mode == 'default' ) {
 	
-	$hover_actions['send'] = __( 'Send', 'it-l10n-backupbuddy' );
-	$hover_actions['zip_viewer'] = __( 'Browse & Restore Files', 'it-l10n-backupbuddy' );
-	$hover_actions['note'] = __( 'Note', 'it-l10n-backupbuddy' );
-	$hover_actions['hash'] = __( 'Checksum', 'it-l10n-backupbuddy' );
+	$hover_actions['send'] = '<span class="dashicons dashicons-migrate"></span> ' . __( 'Send', 'it-l10n-backupbuddy' );
+	$hover_actions['zip_viewer'] = '<span class="dashicons dashicons-visibility"></span>&nbsp; ' . __( 'Browse & Restore Files', 'it-l10n-backupbuddy' );
+	$hover_actions['note'] = '<span class="dashicons dashicons-edit"></span> ' . __( 'Note', 'it-l10n-backupbuddy' );
+	$hover_actions['hash'] = '<span class="dashicons dashicons-chart-line"></span> ' . __( 'Checksum', 'it-l10n-backupbuddy' );
 	$bulk_actions = array( 'delete_backup' => __( 'Delete', 'it-l10n-backupbuddy' ) );
 
 }
 
 
 if ( $listing_mode == 'migrate' ) {
-	$hover_actions['migrate'] = __( 'Migrate', 'it-l10n-backupbuddy' );
-	$hover_actions[pb_backupbuddy::ajax_url( 'download_archive' ) . '&backupbuddy_backup='] = __( 'Download', 'it-l10n-backupbuddy' );
-	$hover_actions['note'] = __( 'Note', 'it-l10n-backupbuddy' );
+	$hover_actions['migrate'] = '<span class="dashicons dashicons-share-alt2"></span> ' . __( 'Migrate', 'it-l10n-backupbuddy' );
+	$hover_actions[pb_backupbuddy::ajax_url( 'download_archive' ) . '&backupbuddy_backup='] = '<span class="dashicons dashicons-download"></span> ' . __( 'Download', 'it-l10n-backupbuddy' );
+	$hover_actions['note'] = '<span class="dashicons dashicons-edit"></span> ' . __( 'Note', 'it-l10n-backupbuddy' );
 	$bulk_actions = array();
 	
 	foreach( $backups as $backup_id => $backup ) {
@@ -49,12 +49,12 @@ if ( $listing_mode == 'migrate' ) {
 
 
 if ( $listing_mode == 'restore_migrate' ) {
-	$hover_actions[pb_backupbuddy::ajax_url( 'download_archive' ) . '&backupbuddy_backup='] = __( 'Download', 'it-l10n-backupbuddy' );
-	$hover_actions['send'] = 'Send';
-	$hover_actions['page=pb_backupbuddy_backup&zip_viewer'] = __( 'Browse & Restore Files', 'it-l10n-backupbuddy' );
-	$hover_actions['rollback'] = __( 'Database Rollback', 'it-l10n-backupbuddy' );
-	$hover_actions['migrate'] = __( 'Migrate', 'it-l10n-backupbuddy' );
-	$hover_actions['note'] = __( 'Note', 'it-l10n-backupbuddy' );
+	$hover_actions[pb_backupbuddy::ajax_url( 'download_archive' ) . '&backupbuddy_backup='] = '<span class="dashicons dashicons-download"></span> ' . __( 'Download', 'it-l10n-backupbuddy' );
+	$hover_actions['send'] = '<span class="dashicons dashicons-migrate"></span> ' . __( 'Send', 'it-l10n-backupbuddy' );
+	$hover_actions['page=pb_backupbuddy_backup&zip_viewer'] = '<span class="dashicons dashicons-visibility"></span>&nbsp; ' . __( 'Browse & Restore Files', 'it-l10n-backupbuddy' );
+	$hover_actions['rollback'] = '<span class="dashicons dashicons-backup"></span> ' . __( 'Database Rollback', 'it-l10n-backupbuddy' );
+	$hover_actions['migrate'] = '<span class="dashicons dashicons-share-alt2"></span> ' . __( 'Migrate', 'it-l10n-backupbuddy' );
+	$hover_actions['note'] = '<span class="dashicons dashicons-edit"></span> ' . __( 'Note', 'it-l10n-backupbuddy' );
 	$bulk_actions = array();
 	
 	/*

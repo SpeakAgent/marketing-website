@@ -77,7 +77,7 @@ if ( pb_backupbuddy::_GET( 'file' ) != '' ) {
 	
 	<div class="backup_select_buttons">
 		<button href="#pb_upload_modal" class="button button-secondary leanModal createdb_modal_link" style="font-size: 14px;">Upload a Backup</button>
-		<button href="#pb_stash_modal" class="button button-secondary leanModal createdb_modal_link" style="font-size: 14px;">Restore from Stash</button>
+		<button href="#pb_stash_modal" class="button button-secondary leanModal createdb_modal_link" style="font-size: 14px;">Restore from Stash / Stash Live</button>
 	</div>
 	
 	<?php
@@ -105,6 +105,7 @@ if ( pb_backupbuddy::_GET( 'file' ) != '' ) {
 			
 			
 			$backup_type = '';
+			$backup_type_text = '';
 			if ( $backup_archive['comment']['type'] == '' ) {
 				if ( stristr( $backup_archive['file'], '-db-' ) !== false ) {
 					$backup_type_text = 'Database Only Backup';
@@ -186,7 +187,7 @@ if ( pb_backupbuddy::_GET( 'file' ) != '' ) {
 				echo '<a href="#hash_view" class="button button-tertiary leanModal view_hash_click" style=" float: right;" id="view_hash_' . $i . '" data-file="' . $backup_archive['file'] . '">View Checksum</a>';
 				echo '<a href="#info_' . $file_hash . '" class="button button-tertiary leanModal" style="float: right;" id="view_meta_' . $i . '">View Meta</a>';
 				?>
-				<div id="hash_view" style="display: none; height: 30%;">
+				<div id="hash_view" style="display: none;">
 					<div class="modal">
 						<div class="modal_header">
 							<a class="modal_close">&times;</a>

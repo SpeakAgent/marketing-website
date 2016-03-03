@@ -1,5 +1,7 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
+
 // Tests ACTUAL PHP maximum runtime.
 /*	php_max_runtime_test()
 *	

@@ -37,6 +37,717 @@ if ( 0 === strcmp( basename( dirname( __FILE__ ) ), 'zipbuddy' ) ) {
 
 if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 
+	// Currently just a wrapper for pb_backupbuddy::status()
+	// TODO: Would prefer to have a generic logger and this would
+	// extend it if required (we may not even need this dependent
+	// on how logging evolves)
+	class pluginbuddy_zipbuddy_logger {
+		
+		protected $_prefix = '';
+		protected $_suffix = '';
+		
+		public function __construct( $prefix = "", $suffix = "" ) {
+			
+			if ( !empty( $prefix ) ) {
+
+				$this->set_prefix( $prefix );
+
+			}
+			
+			if ( !empty( $suffix ) ) {
+
+				$this->set_suffix( $suffix );
+
+			}
+			
+		}
+		
+		public function __destruct() {
+			
+		}
+		
+		public function set_prefix( $prefix = "" ) {
+			
+			$this->_prefix = $prefix;
+			
+			return $this;
+			
+		}
+		
+		public function get_prefix() {
+			
+			return $this->_prefix;
+
+		}
+		
+		public function set_suffix( $suffix = "" ) {
+			
+			$this->_suffix = $suffix;
+			
+			return $this;
+			
+		}
+		
+		public function get_suffix() {
+			
+			return $this->_suffix;
+
+		}
+		
+		public function log( $level, $message, $prefix = null, $suffix = null ) {
+			
+			$prefix_to_use = ( is_null( $prefix ) ) ? $this->_prefix : ( ( is_string( $prefix ) ) ? $prefix : "" ) ;
+			$suffix_to_use = ( is_null( $suffix ) ) ? $this->_suffix : ( ( is_string( $suffix ) ) ? $suffix : "" ) ;
+			
+			pb_backupbuddy::status( $level, $prefix_to_use . $message . $suffix_to_use );
+			
+			return $this;
+			
+		}
+		
+	}
+
+	class pluginbuddy_zipbuddy_null_object {
+		
+		public function __construct() {
+			
+		}
+		
+		public function __destruct() {
+			
+		}
+		
+		public function __call( $method, $arguments ) {
+			
+		}
+		
+	}
+		
+	/**
+	 *	pluginbuddy_zipbuddy_process_monitor Class
+	 *
+	 *	Class that is used monitor the progress of any process and take actions to try and
+	 *	ensure the process execution is prolonged as much as possible.
+	 *
+	 */
+	 class pluginbuddy_zipbuddy_process_monitor {
+	 
+		const ZIP_DEFAULT_EXECUTION_MAX_PERIOD = 30;
+		const ZIP_DEFAULT_EXECUTION_THRESHOLD_PERIOD = 10;
+
+		const ZIP_DEFAULT_MONITOR_THRESHOLD_PERIOD = 10;
+
+		const ZIP_DEFAULT_TICKLE_THRESHOLD_PERIOD = 10;
+	
+		protected $_execution_threshold_period = 0;
+		protected $_execution_start_time = 0;
+		protected $_execution_max_period = 0;
+		
+		protected $_monitor_threshold_period = 0;
+		protected $_monitor_start_time = 0;
+		protected $_monitoring_usage = false;
+		protected $_start_user_time = 0;
+		protected $_elapsed_user_time = 0;
+		
+		protected $_tickle_threshold_period = 0;
+		protected $_tickle_start_time = 0;
+		protected $_server_tickling = false;
+		protected $_server_tickler = '';
+		
+		protected $_creation_time = 0;
+		
+		protected $_report_connection_status = false;
+
+         /**
+         * The logger we will use
+         * 
+         * @var logger	object
+         */
+		protected $_logger = null;
+	
+		public function __construct( &$parent = null ) {
+		
+			// Inherit the parent logger by default (if it has one), caller may override after instantiated
+			if ( $parent && method_exists( $parent, 'get_logger' ) ) {
+			
+				$this->set_logger( $parent->get_logger() );
+				
+			}
+		
+			$now = time();
+			
+			$this->set_creation_time( $now );
+			
+			// We can try and derive the configured execution_max_period
+			// and the execution_threshold_period is set based on that. If
+			// this is overridden by a given period then we can also choose
+			// whether to set the threshold period based on that or set a
+			// specific threshold period (this is up to the caller).
+			$this->set_execution_start_time( $now );
+			$this->set_execution_max_period( 'auto' );
+			
+			// The monitor threshold period cannot be derived
+			$this->set_monitor_start_time( $now );
+			$this->set_monitor_threshold_period( self::ZIP_DEFAULT_MONITOR_THRESHOLD_PERIOD );
+
+			// The tickle threshold period cannot be derived
+			$this->set_tickle_start_time( $now );
+			$this->set_tickle_threshold_period( self::ZIP_DEFAULT_TICKLE_THRESHOLD_PERIOD );
+
+			$this->initialize_monitoring_usage();
+			
+			$this->set_server_tickling( true );
+			$this->_server_tickler = '<!--' . str_shuffle( substr( str_repeat( implode( '', range( 'a', 'z' ) ), 40 ), 0, 1024 ) ) . '-->' . chr(13) . chr(10);
+
+			$this->log_parameters();
+
+		}
+		
+		public function __destruct() {
+		
+		}
+		
+		/**
+		 * 
+		 *	checkpoint()
+		 *
+		 *	Check how we are doing and whether we need to take any steps to prolong
+		 *	execution at this time. If any of these report anythng then connection
+		 *	status is also reported.
+		 *
+		 *	@return		object			Return reference to this object
+		 *
+		 */
+		public function checkpoint() {
+		
+			$this->monitor_usage();
+			$this->monitor_execution_time();
+			$this->tickle_server();
+			
+			return $this;
+		
+		}
+		
+		public function get_creation_time() {
+		
+			return $this->_creation_time;
+		
+		}
+	
+		public function set_creation_time( $time = 0 ) {
+		
+			$this->_creation_time = ( 0 === $time ) ? time() : $time ;
+			return $this;
+		
+		}
+		
+		public function get_elapsed_time() {
+			
+			return ( time() - $this->get_creation_time() );
+			
+		}
+	
+		// Methods for handling the execution time management
+
+		public function get_execution_threshold_period() {
+		
+			return $this->_execution_threshold_period;
+		
+		}
+	
+		public function set_execution_threshold_period( $period = self::ZIP_DEFAULT_EXECUTION_THRESHOLD_PERIOD ) {
+		
+			$execution_max_period = 0;
+		
+			if ( true === is_string( $period ) ) {
+			
+				switch ( $period ) {
+				
+					case 'auto':
+						// If auto then set based on execution max period
+						if ( 0 === ( $execution_max_period = $this->get_execution_max_period() ) ) {
+						
+							// Not set yet so we need to set it with auto
+							// Ensure we don't get into a recursive loop...
+							$execution_max_period = $this->set_execution_max_period( 'auto', false )->get_execution_max_period();
+						
+						}
+					
+						// Bit of an arbitrary proportion...
+						$this->_execution_threshold_period = (int)( $execution_max_period / 3 );
+						break;
+						
+					default:
+						// Unknown mode so use default value
+						$this->_execution_threshold_period = self::ZIP_DEFAULT_EXECUTION_THRESHOLD_PERIOD;
+				
+				}
+			
+			} elseif ( is_numeric( $period ) && ( 0 < $period ) ) {
+			
+				$this->_execution_threshold_period = $period;
+			
+			} else {
+				
+				$this->_execution_threshold_period = self::ZIP_DEFAULT_EXECUTION_THRESHOLD_PERIOD;
+				
+			}
+
+			return $this;
+
+		}
+	
+		public function get_execution_start_time() {
+		
+			return $this->_execution_start_time;
+		
+		}
+	
+		public function set_execution_start_time( $time = 0 ) {
+		
+			( 0 === $time ) ? $this->_execution_start_time = time() : $this->_execution_start_time = $time ;
+			return $this;
+		
+		}
+	
+		public function get_execution_max_period() {
+		
+			return $this->_execution_max_period;
+		
+		}
+	
+		/**
+		 * 
+		 *	set_execution_max_period()
+		 *
+		 *	Set, or try to derive, what the maximum execution period should be.
+		 *	Possibly also set the threshold if max was derived.
+		 *	For deriving try to get configured values to use, otherwise use the
+		 *	default.
+		 *	The 0 value needs to be specially handled since it implies unlimited
+		 *	and so we map this to the PHP maximum integer value. In practice,
+		 *	unlimited doesn't really mean much since hosting will have other
+		 *	timeouts that kick in - but we need to honour whatever the user
+		 *	has configured.
+		 *
+		 *	@param		string|int		$period				Integer for specific value, 'auto' for derived
+		 *	@param		bool			$auto_set_threshold	Whether to auto set threshold period or not		
+		 *	@return		object								This object instance	
+		 *
+		 */
+		public function set_execution_max_period( $period = self::ZIP_DEFAULT_EXECUTION_MAX_PERIOD, $auto_set_threshold = true ) {
+		
+			// Get the originally configured value if we can.
+			// Returned values may be false or an integer as a string.
+			// If false we want to keep it as false and we'll use our
+			// default; if 0 | -1 then we'll set as larger integer;
+			// otherwise if it is a numeric value and +ve we'll use it
+			// otherwise set to false.
+			$configured_execution_time = @get_cfg_var( 'max_execution_time' );
+			
+			$cfg_var_map = array(	false => false,
+									"-1" => (int)PHP_INT_MAX,
+									"0" => (int)PHP_INT_MAX,
+									"" => false,
+								);
+			if ( array_key_exists( $configured_execution_time, $cfg_var_map ) ) {
+				
+				// "Special" value, map it
+				$configured_execution_time = $cfg_var_map[ $configured_execution_time ];
+				
+			} else {
+				
+				// "Ordinary" value but must be numeric and +ve
+				if ( is_numeric( $configured_execution_time ) && ( 0 < (int)$configured_execution_time )) {
+					
+					$configured_execution_time = (int)$configured_execution_time;
+					
+				} else {
+					
+					$configured_execution_time = false;
+					
+				}
+				
+			}
+			
+			// Get the current value if we can.
+			// Returned values may be false or an integer as a string.
+			// If false we want to keep it as false and we'll use our
+			// default; if 0 | -1 then we'll set as larger integer;
+			// if "7200" we have to assume it's because we set that
+			// so make it false; otherwsie if it is a numeric value
+			// and +ve we'll use it; otherwise set false.
+			$current_execution_time = @ini_get( 'max_execution_time' );
+
+			$ini_get_map = array(	false => false,
+									"-1" => (int)PHP_INT_MAX,
+									"0" => (int)PHP_INT_MAX,
+									"7200" => false,
+									"" => false,
+								);
+			if ( array_key_exists( $current_execution_time, $ini_get_map ) ) {
+				
+				// "Special" value, map it
+				$current_execution_time = $ini_get_map[ $current_execution_time ];
+				
+			} else {
+				
+				// "Ordinary" value but must be numeric and +ve
+				if ( is_numeric( $current_execution_time ) && ( 0 < (int)$current_execution_time )) {
+					
+					$current_execution_time = (int)$current_execution_time;
+					
+				} else {
+					
+					$current_execution_time = false;
+					
+				}
+				
+			}
+		
+			if ( true === is_string( $period ) ) {
+			
+				switch ( $period ) {
+				
+					case 'auto':
+						// Try for the currently set execution time
+						if ( false === $current_execution_time ) {
+						
+							// Couldn't get a value so try for configured value
+							if ( false === $configured_execution_time ) {
+						
+								// Couldn't get a configured value for some reason so use default
+								$this->_execution_max_period = self::ZIP_DEFAULT_EXECUTION_MAX_PERIOD;
+							
+							} else {
+						
+								// Got a configured value so use it
+								$this->_execution_max_period = (int) $configured_execution_time;
+						
+							}
+							
+						} else {
+						
+							// Got a non-zero current execution time so use it
+							$this->_execution_max_period = (int) $current_execution_time;
+						
+						}
+						
+						// If set by auto then make sure we (re)set threshold as auto _unless_
+						// told not to...
+						if ( true === $auto_set_threshold ) {
+						
+							$this->set_execution_threshold_period( 'auto' );
+							
+						}
+						break;
+					
+					default:
+						// Unknown mode so use default value
+						$this->_execution_max_period = self::ZIP_DEFAULT_EXECUTION_MAX_PERIOD;
+				
+				}
+			
+			} elseif ( is_numeric( $period ) && ( 0 < $period ) ) {
+			
+				$this->_execution_max_period = (int)$period;
+			
+			} else {
+				
+				$this->_execution_max_period = self::ZIP_DEFAULT_EXECUTION_MAX_PERIOD;
+				
+			}
+		
+			return $this;
+		
+		}
+		
+		// Methods for handling the monitoring action
+	
+		public function get_monitor_threshold_period() {
+		
+			return $this->_monitor_threshold_period;
+		
+		}
+	
+		public function set_monitor_threshold_period( $period = self::ZIP_DEFAULT_MONITOR_THRESHOLD_PERIOD ) {
+		
+			$this->_monitor_threshold_period = ( is_numeric( $period ) && ( 0 < $period ) ) ? $period : self::ZIP_DEFAULT_MONITOR_THRESHOLD_PERIOD ;
+			return $this;
+		
+		}
+	
+		public function get_monitor_start_time() {
+		
+			return $this->_monitor_start_time;
+		
+		}
+	
+		public function set_monitor_start_time( $time = 0 ) {
+		
+			$this->_monitor_start_time = ( 0 === $time ) ? time() : $time ;
+			return $this;
+		
+		}
+		
+		public function initialize_monitoring_usage( $reset = true ) {
+		
+			$usage_data = array();
+		
+			// Must determine if we can monitor usage data
+			if ( function_exists( 'getrusage' ) && is_callable( 'getrusage' ) ) {
+				
+				$this->_monitoring_usage = true;
+		
+				// We need to know the user time value at the start so we can monitor how
+				// much actual user time we are using (which counts against max_execution_time)
+				// We call this when object is created to maek sure the init is done but we can
+				// make a later call closer to when we wnt to start monitoring it and that will
+				// reset the start time.
+				if ( ( 0 === $this->_start_user_time ) || ( true === $reset ) ) {
+			
+					$usage_data = getrusage();
+					$this->_start_user_time = $usage_data[ 'ru_utime.tv_sec' ];
+			
+				}
+			
+			}
+			
+		}
+		
+		public function is_monitoring_usage() {
+		
+			return ( true === $this->_monitoring_usage );
+		
+		}
+		
+		// Methods for handling the server tickling action
+		
+		public function get_tickle_threshold_period() {
+		
+			return $this->_tickle_threshold_period;
+		
+		}
+	
+		public function set_tickle_threshold_period( $period = self::ZIP_DEFAULT_TICKLE_THRESHOLD_PERIOD ) {
+		
+			$this->_tickle_threshold_period = ( is_numeric( $period ) && ( 0 < $period ) ) ? $period : self::ZIP_DEFAULT_TICKLE_THRESHOLD_PERIOD ;
+			return $this;
+		
+		}
+	
+		public function get_tickle_start_time() {
+		
+			return $this->_tickle_start_time;
+		
+		}
+	
+		public function set_tickle_start_time( $time = 0 ) {
+		
+			$this->_tickle_start_time = ( 0 === $time ) ? time() : $time ;
+			return $this;
+		
+		}
+	
+		public function set_server_tickling( $tickle = true ) {
+		
+			$this->_server_tickling = $tickle;
+			return $this;
+		
+		}
+		
+		public function get_server_tickling() {
+		
+			return $this->_server_tickling;
+		
+		}
+		
+		public function is_server_tickling() {
+		
+			return ( true === $this->_server_tickling );
+		
+		}
+		
+		public function get_server_tickler() {
+		
+			return $this->_server_tickler;
+		
+		}
+		
+		public function connection_status_tostring( $status ) {
+		
+			$status_name = '';
+			
+			switch ( $status ) {
+			
+				case CONNECTION_NORMAL:
+					$status_name = 'Normal';
+					break;
+				case CONNECTION_ABORTED:
+					$status_name = 'Aborted';
+					break;
+				case CONNECTION_TIMEOUT:
+					$status_name = 'Timeout';
+					break;
+				default:
+					$status_name = 'Unknown';
+			
+			}
+			
+			return $status_name;
+		
+		}
+		
+		protected function monitor_usage() {
+		
+			$usage_data = array();
+			$current_monitor_period = 0;
+			
+			// Would expect to monitor except on Windows which doesn't support getrusage()
+			if ( true === $this->is_monitoring_usage() ) {
+			
+				// Decide if we need to log usage data
+				$current_monitor_period = ( time() - $this->get_monitor_start_time() );
+				if ( $this->get_monitor_threshold_period() < $current_monitor_period ) {
+			
+					// Get some usage data from the server (check that function available) and log it
+					$usage_data = getrusage();
+				
+					// Determine the total user space time since we initialized the monitoring (relative)
+					$this->_elapsed_user_time = ( $usage_data[ 'ru_utime.tv_sec' ] - $this->_start_user_time );
+					$this->get_logger()->log( 'details', sprintf( __('Zip process reported: Usage data (raw/relative): ( %1$s, %2$s, %3$s, %4$s, %5$s )/( -, %6$s, -, -, - )','it-l10n-backupbuddy' ), $usage_data[ 'ru_stime.tv_sec' ], $usage_data[ 'ru_utime.tv_sec' ], $usage_data[ 'ru_majflt' ], $usage_data[ 'ru_nvcsw' ], $usage_data[ 'ru_nivcsw' ], $this->_elapsed_user_time ) );
+
+					// Reset the monitoring period start time
+					$this->set_monitor_start_time( time() );
+					
+					// We reported something so report the connection status as well
+					$this->_report_connection_status = true;
+
+				}
+			
+			}
+			
+			return $this;
+			
+		}
+
+		protected function monitor_execution_time() {
+						
+			$current_execution_period = 0;
+			
+			// Decide if we have been running long enough to need to reset time limit
+			$current_execution_period = ( time() - $this->get_execution_start_time() );
+			if ( $this->get_execution_threshold_period() < $current_execution_period ) {
+		
+				// Log how long we ran for and then reset the start time and max period
+				$this->get_logger()->log( 'details', sprintf( __('Zip process reported: %1$s seconds elapsed - resetting timebase to %2$s seconds','it-l10n-backupbuddy' ), $current_execution_period, $this->get_execution_max_period() ) );
+
+				// Reset the execution period start time
+				$this->set_execution_start_time( time() );
+			
+				// Reset the execution time timer (if the server honours this)
+				// Belt and braces in case some server disables set_time_limit()
+				// for some reason, hope that init_set() works - if neither works
+				// there isn't much we can do about it - user will just have to
+				// use a step period that matches the configured max_execution_time.
+				@set_time_limit( $this->get_execution_max_period() );
+				@ini_set( 'max_execution_time', $this->get_execution_max_period );
+			
+				// We reported something so report the connection status as well
+				$this->_report_connection_status = true;
+
+			}
+			
+			return $this;
+		
+		}
+		
+		protected function tickle_server() {
+		
+			$current_tickle_period = 0;
+		
+			// Only bother with server tickling if it is selected
+			if ( true === $this->is_server_tickling() ) {
+			
+				// Decide if we have been running long enough to need to tickle the server
+				$current_tickle_period = ( time() - $this->get_tickle_start_time() );
+				if ( $this->get_tickle_threshold_period() < $current_tickle_period ) {
+			
+					// Log how long since we last tickled and indicate tickling
+					$this->get_logger()->log( 'details', sprintf( __('Zip process reported: %1$s seconds elapsed - tickling server','it-l10n-backupbuddy' ), $current_tickle_period ) );
+					$this->set_tickle_start_time( time() );
+				
+					// Output the tickler to give something to flush
+					echo $this->get_server_tickler();
+				
+					// Force flushing and end of buffering
+					// Possibly should need to do this because nothing should have started buffering
+					// should it? It's possible that PHP config could have enabled one level of buffering
+					// so at least handle that with the method as exemplified in the PHP manual. Also do
+					// a staright flush as that should cause a flush at least to the server which is
+					// actually all we want in this particular case.
+					while ( @ob_end_flush() );
+					flush();
+					
+					// We reported something so report the connection status as well
+					$this->_report_connection_status = true;
+
+				}
+			
+			}
+			
+			return $this;
+		
+		}
+		
+		protected function report_connection_status() {
+		
+			if ( true === $this->_report_connection_status ) {
+			
+				// Log where we are at and connection status for information
+				$this->get_logger()->log( 'details', sprintf( __('Zip process reported: Connection status: %1$s (%2$s)','it-l10n-backupbuddy' ), $this->connection_status_tostring( connection_status() ), connection_status() ) );
+				$this->_report_connection_status = false;
+						
+			}
+			
+			return $this;
+		
+		}
+
+		// Log our setup parameters
+		public function log_parameters() {
+		
+			$this->get_logger()->log( 'details', sprintf( __('Zip process reported: Execution max/threshold periods: %1$ss/%2$ss','it-l10n-backupbuddy' ), $this->get_execution_max_period(), $this->get_execution_threshold_period() ) );
+			$this->get_logger()->log( 'details', sprintf( __('Zip process reported: Monitor threshold period: %1$ss','it-l10n-backupbuddy' ), $this->get_monitor_threshold_period() ) );
+			$this->get_logger()->log( 'details', sprintf( __('Zip process reported: Tickle threshold period: %1$ss','it-l10n-backupbuddy' ), $this->get_tickle_threshold_period() ) );
+
+			return $this;
+			
+		}
+
+		public function set_logger( $logger ) {
+			
+			$this->_logger = $logger;
+			
+			return $this;
+			
+		}
+		
+		public function get_logger() {
+			
+			if ( is_null( $this->_logger ) ) {
+				
+				$logger = new pluginbuddy_zipbuddy_null_object();
+				$this->set_logger( $logger );
+				
+			}
+			
+			return $this->_logger;
+			
+		}
+		
+	}
+	
 	class pluginbuddy_zipbuddy {
 	
 		const ZIP_METHODS_TRANSIENT = 'pb_backupbuddy_avail_zip_methods';
@@ -44,7 +755,22 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 		const ZIP_METHODS_TRANSIENT_LIFE = 43200; // 12 Hours - really shouldn't change unless server problem
 		const NORM_DIRECTORY_SEPARATOR = '/';
 		const DIRECTORY_SEPARATORS = '/\\';
-
+		
+		const STATE_NAME_BEGIN = 'begin';
+		const STATE_ID_BEGIN = 1;
+		const STATE_NAME_IN_PROGRESS = 'in_progress';
+		const STATE_ID_IN_PROGRESS = 2;
+		const STATE_NAME_END = 'end';
+		const STATE_ID_END = 3;
+		
+		const ZIP_DEFAULT_IGNORE_WARNINGS = false;
+		const ZIP_DEFAULT_IGNORE_SYMLINKS = true;
+		const ZIP_DEFAULT_COMPRESSION = true;
+		const ZIP_DEFAULT_STEP_PERIOD = 30;
+		const ZIP_DEFAULT_BURST_GAP = 2;
+		const ZIP_DEFAULT_MIN_BURST_CONTENT = 10485760; // 10MB
+		const ZIP_DEFAULT_MAX_BURST_CONTENT = 104857600; // 100MB
+		const ZIP_DEFAULT_BURST_THRESHOLD_PERIOD = 30;
 
         /**
          * The plugin path for this plugin
@@ -66,14 +792,6 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
          * @var array of string
          */
         protected $_requested_zip_methods = array();
-
-        /**
-         * The mode which the object is being created for
-         * Note: This is now ignored as an object is instantiated for both zip & unzip services
-         * 
-         * @var string
-         */
-        protected $_mode = "";
 
         /**
          * Status message array used when calling other methods to get status information back
@@ -171,6 +889,62 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
          */
 		protected $_compression = null;
 		
+         /**
+         * Convenience integer indicating the maximum period for any action during a step
+         * 
+         * @var step_period	int
+         */
+		protected $_step_period = null;
+		
+         /**
+         * Convenience integer indicating the gap to delay between burst
+         * 
+         * @var burst_gap	int
+         */
+		protected $_burst_gap = null;
+		
+          /**
+         * Convenience double indicating the minimum burst content size
+         * 
+         * @var min_burst_content	double
+         */
+		protected $_min_burst_content = null;
+		
+          /**
+         * Convenience double indicating the maximum burst content size
+         * 
+         * @var max_burst_content	double
+         */
+		protected $_max_burst_content = null;
+		
+          /**
+         * Convenience integer indicating the burst threshold period
+         * 
+         * @var burst_threshold_period	int
+         */
+		protected $_burst_threshold_period = null;
+		
+        /**
+         * The logger to use
+         * 
+         * @var logger	object
+         */
+		protected $_logger = null;
+
+         /**
+         * The default logger to give to any children
+         * 
+         * @var default_child_logger	object
+         */
+		protected $_default_child_logger = null;
+
+         /**
+         * The process monitor to use
+         * 
+         * @var process_monitor	object
+         */
+		protected $_process_monitor = null;
+
 		/**
 		 * 
 		 * get_transient_names_static()
@@ -194,30 +968,39 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 		 *	
 		 *	@param		string		$temp_dir		The path of the temporary directory to use
 		 *	@param		array		$zip_methods	Optional: The set of zip methods requested to use
-		 *	@param		string		$mode			Optional: The zip mode for the object (ignored currently - may be reused?)
 		 *	@return		null
 		 *
 		 */
-		public function __construct( $temp_dir, $zip_methods = array(), $mode = 'zip' ) {
+		public function __construct( $temp_dir, $zip_methods = array() ) {
 
+			// Zipbuddy creates it's own default logger but can be overridden
+			// Note: if user wants to override they must "get" the current logger
+			// and destroy it otherwise it gets orphaned.
+			$this->set_logger( new pluginbuddy_zipbuddy_logger() );
+			
+			// Use this for all our children unless they need a specific logger
+			$this->_default_child_logger = new pluginbuddy_zipbuddy_logger();
+						
+			// Zipbuddy creates it's own default process monitor but can be overridden
+			// Note: if user wants to override they must "get" the current process
+			// monitor and destroy it otherwise it gets orphaned. We'll give it our
+			// logger
+			$this->set_process_monitor( new pluginbuddy_zipbuddy_process_monitor( $this ) );
+			
 			// Normalize the trailing directory separator on the path
 			$temp_dir = rtrim( $temp_dir, self::DIRECTORY_SEPARATORS ) . self::NORM_DIRECTORY_SEPARATOR;
 			
 			// Normalize platform specific directory separators in path
 			$this->_tempdir = str_replace( DIRECTORY_SEPARATOR, self::NORM_DIRECTORY_SEPARATOR, $temp_dir );
 			
-			// Note: this will be removed and should no longer be used - an object is instantiated for
-			// both zip & unzip services
-			$this->_mode = $mode;
-			
 			// Record where we are located (the directory name)
 			$this->_whereami = basename( dirname( __FILE__ ) );
 			
-			// Use our location to determine which zip methods transient we should be using
-			$this->_zip_methods_transient = ( 0 === strcmp( $this->_whereami, 'zipbuddy' ) ) ? self::ZIP_METHODS_TRANSIENT : self::ZIP_METHODS_TRANSIENT_EXPERIMENTAL ;
-
 			// Set a flag for easy conditional testing
 			$this->_is_experimental = ( 0 === strcmp( $this->_whereami, 'zipbuddy' ) ) ? false : true ;
+
+			// Use our experimental flag to determine which zip methods transient we should be using
+			$this->_zip_methods_transient = ( $this->_is_experimental ) ? self::ZIP_METHODS_TRANSIENT_EXPERIMENTAL : self::ZIP_METHODS_TRANSIENT ;
 
 			// Set the sapi name so we can use it later			
 			$this->set_sapi_name();
@@ -230,7 +1013,19 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			
 			// Derive whether compression should be used (can be overridden by method call)
 			$this->set_compression();
+			
+			// Derive what the step period should be for any action after which a new step must be initiated
+			$this->set_step_period();
 						
+			// Derive what the interburst gap should be for any burst related action
+			$this->set_burst_gap();
+			
+			// Derive what the min burst content size should be for any burst related action
+			$this->set_min_burst_content();
+			
+			// Derive what the max burst content size should be for any burst related action
+			$this->set_max_burst_content();
+			
 			// Make sure we load the core abstract class as this will always be needed
 			require_once( pb_backupbuddy::plugin_path() . '/lib/' . $this->_whereami . '/zbzipcore.php' );
 			
@@ -305,6 +1100,13 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 		 *
 		 */
 		public function __destruct( ) {
+			
+			// TODO: Perhaps we need to check if the logger is our original one
+			// that we created and if so then we should destroy it as we own it,
+			// otherwise someone else owns it and we shouldn't destroy it. Same
+			// goes for process monitor.
+			
+			unset( $this->_default_child_logger );
 
 		}
 		
@@ -353,18 +1155,117 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 		 *	of the global option if it is set or otherwise the default value given
 		 *
 		 *	@param		string		$option		The option name in the global options array
-		 *	@param		bool		$value		Should be bool true|false but could be null
-		 *	@return		bool		Value of $_ignore_warnings
+		 *	@param		mixed		$value		Should be bool true|false but could be null
+		 * 	@param		bool		$default	The default value to use if no other provided/available
+		 *	@return		bool					Derived boolean value
 		 *
 		 */
-		 protected function derive_optional_bool( $option, $value, $default ) {
+		 protected function derive_optional_bool( $option, $value, $default, $empty_option_default = false ) {
 		 	$result = false;
 		 	if ( is_bool( $value )) {
 		 		$result = $value;
 		 	} elseif ( isset( pb_backupbuddy::$options[ $option ] ) ) {
-		 		( ( pb_backupbuddy::$options[ $option ] == '1' ) || ( pb_backupbuddy::$options[ $option ] == true ) ) ? $result = true : $result = false ;
+		 		$result = ( ( pb_backupbuddy::$options[ $option ] == '1' ) || ( pb_backupbuddy::$options[ $option ] == true ) ) ? true : $empty_option_default ;
 		 	} else {
 		 		$result = $default;
+		 	}
+		 	return $result;
+		 }
+		 
+		/**
+		 *	derive_optional_int()
+		 *
+		 *	Utility function to derive the value of an optional integer based on either
+		 *	a specifc value being given or the related global option being set or a given
+		 *	default value otherise.
+		 *	If the provided $value is null then this forces the use of the global option if
+		 *	it is set (adjusted by any factor given) or otherwise the default value given.
+		 *	If the global option is set but is not numeric (generally left empty) then we
+		 *	use the provided $empty_option_value (which is _not_ adjusted by the factor but
+		 *	assumed to be valid as it is - for example if the option is given in MB but
+		 *	the required value to use is in bytes then we would adjust by multiplying by
+		 *	1024*1024 but the empty option value is assumed to be provided in bytes and so
+		 *	is not adjusted.
+		 *	In the case of using the adjusted option value or the empty option value we also
+		 *	apply any value may given so hat, for example, an option value of 0 can be
+		 *	mapped to mean "infinite".
+		 *	Note: integer type options may be stored as strings so that we can use an empty
+		 *	string to signal we want the default value to be used - so we need to check the
+		 *	option value as being numeric rather than integer as this will return true for
+		 *	any string that is a numerical value as well as the option being an integer value
+		 *	in any case but crucually will return false for an empry string as this does not
+		 *	represent any numerical value and hence that triggers the use of the empty option
+		 *	default value.
+		 *	We coerce any numeric string into an integer for assignment.
+		 *
+		 *	@param		string		$option					The option name in the global options array
+		 *	@param		mixed		$value					Should be integer but could be null
+		 * 	@param		int			$default				The deafult value to use if no other provided/available
+		 *	@param		array		$option_value_map		Any special treatment for option values
+		 *	@param		int			$option_value_factor	Adjustment factor if option given in units
+		 *	@param		int			$empty_option_default	Default value to use if option is set but empty
+		 *	@return		int									Derived integer value
+		 *
+		 */
+		 protected function derive_optional_int( $option, $value, $default, $option_value_map = array(), $option_value_factor = 1, $empty_option_default = PHP_INT_MAX ) {
+		 	$result = PHP_INT_MAX;
+		 	if ( is_int( $value )) {
+		 		$result = $value;
+		 	} elseif ( isset( pb_backupbuddy::$options[ $option ] ) ) {
+		 		$result = ( is_numeric( pb_backupbuddy::$options[ $option ] ) ) ? (int)( pb_backupbuddy::$options[ $option ] * $option_value_factor ) : $empty_option_default ;
+		 		$result = ( array_key_exists( $result, $option_value_map ) ) ? $option_value_map[ $result ] : $result ;
+		 	} else {
+		 		$result = $default;
+		 	}
+		 	return $result;
+		 }
+		 
+		/**
+		 *	derive_optional_double()
+		 *
+		 *	Utility function to derive the value of an optional double based on either
+		 *	a specifc value being given or the related global option being set or a given
+		 *	defautl value otherise. If the provided $value is null then this forces the use
+		 *	of the global option if it is set or otherwise the default value given.
+		 *	Note: double type options may be stored as strings so that we can use an empty
+		 *	string to signal we want the default value to be used - so we need to check the
+		 *	option value as being numeric rather than double as this will return true for
+		 *	any string that is a numerical value as well as the option being an double value
+		 *	in any case but crucually will return false for an emprt string as this does not
+		 *	represent any numerical value and hence that triggers the use of the default value.
+		 *	We coerce any numeric string into an double for assignment.
+		 *
+		 *	@param		string		$option					The option name in the global options array
+		 *	@param		mixed		$value					Should be double but could be null
+		 * 	@param		double		$default				The deafult value to use if no other provided/available
+		 *	@param		array		$option_value_map		Any special treatment for option values
+		 *	@param		int			$option_value_factor	Adjustment factor if option given in units
+		 *	@param		double		$empty_option_default	Default value to use if option is set but empty
+		 *	@return		double								Derived double value
+		 *
+		 */
+		 protected function derive_optional_double( $option, $value, $default, $option_value_map = array(), $option_value_factor = 1, $empty_option_default = null ) {
+			// Example of a "large" value on either a 32 or 64 bit system - we cannot set this
+			// as the $empty_option_value default value in the function sig so post-process to
+			// set it if indicated.
+		 	$large_value = ( 4 == PHP_INT_SIZE ) ? (double)( pow(2, 63) - 1 ) : (double)PHP_INT_MAX ;
+		 	$empty_option_default = ( is_null( $empty_option_default ) ) ? $large_value : $empty_option_default ;
+		 	// Need to convert $value to a double only if it is numeric
+		 	$value = ( is_numeric( $value ) ) ? (double)$value : $value ;
+		 	if ( is_double( $value )) {
+		 		$result = $value;
+		 	} elseif ( isset( pb_backupbuddy::$options[ $option ] ) ) {
+		 		$result = ( is_numeric( pb_backupbuddy::$options[ $option ] ) ) ? (double)( pb_backupbuddy::$options[ $option ] * $option_value_factor ) : (double)$empty_option_default ;
+		 		
+		 		// Array keys can only be string/int - for now we'll assume that we only map
+		 		// values that can be cast as int - we may have to consider a different approach
+		 		// later.
+		 		$result = ( array_key_exists( (int)$result, $option_value_map ) ) ? $option_value_map[ (int)$result ] : $result ;
+		 		
+		 		// Special treatment - if the value was mapped to null then we want the derived "large" value
+		 		$result = ( is_null( $result ) ) ? $large_value : $result ;
+		 	} else {
+		 		$result = (double)$default;
 		 	}
 		 	return $result;
 		 }
@@ -377,7 +1278,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 		 */
 		public function set_ignore_warnings( $ignore = null ) {
 		
-		 	$this->_ignore_warnings = $this->derive_optional_bool( 'ignore_zip_warnings', $ignore, false );
+		 	$this->_ignore_warnings = $this->derive_optional_bool( 'ignore_zip_warnings', $ignore, self::ZIP_DEFAULT_IGNORE_WARNINGS );
 		 	
 			return $this;
 			
@@ -388,7 +1289,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 		 *
 		 *	Returns the previously set ignore warnings flag
 		 *
-		 *	@return	mixed			The stored ignore warnings flag true|false|null
+		 *	@return	mixed			The stored ignore warnings flag true|false
 		 */
 		public function get_ignore_warnings() {
 			
@@ -404,7 +1305,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 		 */
 		public function set_ignore_symlinks( $ignore = null ) {
 		
-		 	$this->_ignore_symlinks = $this->derive_optional_bool( 'ignore_zip_symlinks', $ignore, true );
+		 	$this->_ignore_symlinks = $this->derive_optional_bool( 'ignore_zip_symlinks', $ignore, self::ZIP_DEFAULT_IGNORE_SYMLINKS );
 			
 			return $this;
 			
@@ -415,7 +1316,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 		 *
 		 *	Returns the previously set ignore symlinks flag
 		 *
-		 *	@return	mixed			The stored ignore symlinks flag true|false|null
+		 *	@return	mixed			The stored ignore symlinks flag true|false
 		 */
 		public function get_ignore_symlinks() {
 			
@@ -431,7 +1332,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 		 */
 		public function set_compression( $compression = null ) {
 		
-		 	$this->_compression = $this->derive_optional_bool( 'compression', $compression, true );
+		 	$this->_compression = $this->derive_optional_bool( 'compression', $compression, self::ZIP_DEFAULT_COMPRESSION );
 			
 			return $this;
 			
@@ -442,11 +1343,146 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 		 *
 		 *	Returns the previously set compression flag
 		 *
-		 *	@return	mixed			The stored compression flag true|false|null
+		 *	@return	mixed			The stored compression flag true|false
 		 */
 		public function get_compression() {
 			
 			return $this->_compression;
+			
+		}
+
+		/**
+		 *	set_step_period()
+		 *
+		 *	If the option is empty (blank) => default (30s)
+		 *	If the option is 0 => infinite (PHP_MAX_INT)
+		 *
+		 *	@param	mixed	$set_period		integer for specific value or null for choice	
+		 *	@return	object					This object
+		 */
+		public function set_step_period( $step_period = null ) {
+		
+			$step_period_option_value_map = array( 0 => PHP_INT_MAX );
+		
+		 	$this->_step_period = $this->derive_optional_int( 'zip_step_period', $step_period, self::ZIP_DEFAULT_STEP_PERIOD, $step_period_option_value_map, 1, self::ZIP_DEFAULT_STEP_PERIOD );
+			
+			return $this;
+			
+		}
+
+		/**
+		 *	get_step_period()
+		 *
+		 *	Returns the previously set step period
+		 *
+		 *	@return	int			The stored step period int
+		 */
+		public function get_step_period() {
+			
+			return $this->_step_period;
+			
+		}
+
+		/**
+		 *	set_burst_gap()
+		 *
+		 *	If the option is empty (blank) => default (2s)
+		 *
+		 *	@param	mixed	$burst_gap		integer for specific value or null for choice	
+		 *	@return	object					This object
+		 */
+		public function set_burst_gap( $burst_gap = null ) {
+		
+		 	$this->_burst_gap = $this->derive_optional_int( 'zip_burst_gap', $burst_gap, self::ZIP_DEFAULT_BURST_GAP, array(), 1, self::ZIP_DEFAULT_BURST_GAP );
+			
+			return $this;
+			
+		}
+
+		/**
+		 *	get_burst_gap()
+		 *
+		 *	Returns the previously set burst gap
+		 *
+		 *	@return	int			The stored burst gap int
+		 */
+		public function get_burst_gap() {
+			
+			return $this->_burst_gap;
+			
+		}
+
+		/**
+		 *	set_min_burst_content()
+		 * 
+		 *	We want this to be a double so it can have a larger value that we would
+		 *	ever need to be used to represent no minimum
+		 *
+		 *	If the option is empty (blank) => default (10MB)
+		 *	If the option is 0 => large value
+		 *
+		 *	@param	mixed	$min_burst_content		double for specific value or null for choice	
+		 *	@return	object							This object
+		 */
+		public function set_min_burst_content( $min_burst_content = null ) {
+		
+			// null is a special value that is further mapped to a "large" value for the
+			// particular architecture
+			$min_burst_content_option_value_map = array( 0 => null );
+			
+		 	$this->_min_burst_content = $this->derive_optional_double( 'zip_min_burst_content', $min_burst_content, self::ZIP_DEFAULT_MIN_BURST_CONTENT, $min_burst_content_option_value_map, (1024*1024), self::ZIP_DEFAULT_MIN_BURST_CONTENT );
+			
+			return $this;
+			
+		}
+
+		/**
+		 *	get_min_burst_content()
+		 *
+		 *	Returns the previously set min burst content size
+		 *
+		 *	@return	double			The stored min burst content size
+		 */
+		public function get_min_burst_content() {
+			
+			return $this->_min_burst_content;
+			
+		}
+
+		/**
+		 *	set_max_burst_content()
+		 * 
+		 *	We want this to be a double so it can have a larger value that we would
+		 *	ever need to be used to represent no minimum
+		 *
+		 *	If the option is empty (blank) => default (10MB)
+		 *	If the option is 0 => large value
+		 *
+		 *	@param	mixed	$max_burst_content		double for specific value or null for choice	
+		 *	@return	object							This object
+		 */
+		public function set_max_burst_content( $max_burst_content = null ) {
+		
+			// null is a special value that is further mapped to a "large" value for the
+			// particular architecture
+			$max_burst_content_option_value_map = array( 0 => null );
+			
+		 	$this->_max_burst_content = $this->derive_optional_double( 'zip_max_burst_content', $max_burst_content, self::ZIP_DEFAULT_MAX_BURST_CONTENT, $max_burst_content_option_value_map, (1024*1024), self::ZIP_DEFAULT_MAX_BURST_CONTENT );
+			
+			return $this;
+			
+		}
+
+		/**
+		 *	get_max_burst_content()
+		 *
+		 *	Returns the previously set max burst content size
+		 *
+		 *	@return	double			The stored max burst content size
+		 */
+		public function get_max_burst_content() {
+			
+			return $this->_max_burst_content;
 			
 		}
 
@@ -592,9 +1628,10 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			$aggregate_available_methods = array();
 			$server_signature_string = "";
 			$server_signature = "";
+			$use_cached_methods = false;
 
-			// Decide if we should try for cached methods or not			
-			if ( $this->use_cached_methods() ) {
+			// Decide if we should try for cached methods or not (save for later)			
+			if ( ( $use_cached_methods = $this->use_cached_methods() ) ) {
 
 				$aggregate_available_methods = get_transient( $this->_zip_methods_transient );
 				
@@ -618,6 +1655,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 
 			} else {
 			
+				$this->log( 'details', 'Zip method caching disabled based on settings or unavailable.' );
 				$aggregate_available_methods = false;
 				
 			}
@@ -633,8 +1671,8 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 				$aggregate_available_methods[ 'methods' ] = $available_methods;
 				$aggregate_available_methods[ 'details' ] = $available_methods_details;
 				
-				// Only save if we are using caching
-				if ( $this->use_cached_methods() ) {
+				// Only save if we are using caching (determined earlier)
+				if ( $use_cached_methods ) {
 				
 					// Add the server signature for detecting invalidated methods details on a migration or some other change
 					// Note: See discussion above on derivation of signature
@@ -660,7 +1698,8 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			
 				// Filter the available methods - result could be empty
 				// Order will be retained regardless of order of requested methods
-				$available_methods = array_intersect( $available_methods, $requested );
+				// Renumber numeric keys fom 0
+				$available_methods = array_values( array_intersect( $available_methods, $requested ) );
 				
 			}
 
@@ -716,7 +1755,6 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 
 			if ( $caching_disabled || $caching_unavailable ) {
 			
-				pb_backupbuddy::status( 'details', 'Zip method caching disabled based on settings or unavailable.' );
 				$result = false;
 				
 			}
@@ -904,6 +1942,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 
 				$class_name = 'pluginbuddy_zbzip' . $method_tag;
 	
+				// Let the method object inherit our logger
 				$zipper = new $class_name( $this );
 				
 				if ( true === $zipper->is_available( $this->_tempdir ) ) {
@@ -937,6 +1976,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 
 				$class_name = 'pluginbuddy_zbzip' . $method_tag;
 	
+				// Let the method object inherit our logger
 				$zipper = new $class_name( $this );
 				
 				if ( $zipper->get_is_compatibility_method() === true ) {
@@ -1008,41 +2048,157 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			
 		}
 		
+		public function log( $level, $message ) {
+			
+			$this->get_logger()->log( $level, $message );
+			
+		}
+		
+		public function set_logger( $logger ) {
+			
+			$this->_logger = $logger;
+			
+			return $this;
+			
+		}
+		
+		public function get_logger() {
+			
+			if ( is_null( $this->_logger ) ) {
+				
+				$logger = new pluginbuddy_zipbuddy_null_object();
+				$this->set_logger( $logger );
+				
+			}
+			
+			return $this->_logger;
+			
+		}
+		
+		public function set_process_monitor( $process_monitor ) {
+			
+			$this->_process_monitor = $process_monitor;
+			
+			return $this;
+			
+		}
+		
+		public function get_process_monitor() {
+			
+			if ( is_null( $this->_process_monitor ) ) {
+				
+				$pm = new pluginbuddy_zipbuddy_null_object();
+				$this->set_process_monitor( $pm );
+
+			}
+			
+			return $this->_process_monitor;
+			
+		}
+		
+		/**
+		 *	create_empty_zip()
+		 *	
+		 *	A function that creates an empty archive file with optional comment
+		 *	
+		 *	Create an empty zip archive (just the end of central dir) with an optional
+		 *	comment as well. This has a well known basic structure and content so we can
+		 *	write it directly as binary data.
+		 *	
+		 *	@param		string	$zip			Full path & filename of ZIP Archive file to create
+		 *	@param		string	$tempdir		Full path of directory for temporary usage
+		 *	@param		string	$comment		Comment to apply to archive. (optional)
+		 *	@return		bool					True if the creation was successful, false otherwise
+		 *
+		 */
+		public function create_empty_zip( $zip, $tempdir, $comment = '' ) {
+		
+			$result = false;
+			$zip_file_name = $tempdir . basename( $zip );
+			
+			$this->log( 'details', sprintf( __( 'Zip process reported: Initializing zip archive file: %1$s', 'it-l10n-backupbuddy' ), $zip_file_name ) );
+			
+			try {
+			
+				$zip_file = new SplFileObject( $zip_file_name, "wb" );
+
+				// Encode $comment if an array.
+				if ( is_array( $comment ) ) {
+				
+					$comment = json_encode( $comment );
+					
+				}
+				
+				// Don't add an empty comment - so if the encoded string is empty or an empty
+				// string was passed in originally don't do anything.
+				if ( 0 != strlen( $comment ) ) {
+				
+					$comment = 'MetaData:' . $comment . 'MetaData-End:';
+					
+				}
+				
+				// ----- Packed data
+				$binary_data = pack( "VvvvvVVv", 0x06054b50, 0, 0, 0, 0, 0, 0, strlen( $comment ) );
+
+				// ----- Write the 22 bytes of the header in the zip file
+				$zip_file->fwrite( $binary_data, 22 );
+
+				// ----- Write the variable fields
+				if ( 0 != strlen( $comment ) ) {
+				
+				  $zip_file->fwrite( $comment, strlen( $comment ) );
+				  
+				}
+				
+				unset( $zip_file );
+				
+				$this->log( 'details', sprintf( __( 'Zip process reported: Initialized zip archive file', 'it-l10n-backupbuddy' ) ) );
+				$result = true;
+			
+			} catch ( Exception $e ) {
+			
+				$error_string = $e->getMessage();
+				$this->log( 'details', sprintf( __('Zip process reported: Failure to initialize zip archive file - error reported: %1$s','it-l10n-backupbuddy' ), $error_string ) );
+			}
+
+			return $result;
+			
+		}
+		
 		/**
 		 *	add_directory_to_zip()
 		 *
 		 *	Adds a directory to a new or existing (TODO: not yet available) ZIP file.
 		 *
-		 *	@param	string				Full path & filename of ZIP file to create.
-		 *	@param	string				Full directory to add to zip file.
-		 *	@param	array( string )		Array of strings of paths/files to exclude from zipping
-		 *	@param	string				Full directory path to directory to temporarily place ZIP
-		 *	@param	boolean				True: only use PCLZip. False: try all available
+		 *	@param	string	$zip_file					Full path & filename of ZIP file to create.
+		 *	@param	string	$add_directory				Full directory to add to zip file.
+		 *	@param	array	$excludes					Array of strings of paths/files to exclude from zipping
+		 *	@param	string	$temporary_zip_directory	Full directory path to directory to temporarily place ZIP
 		 *
 		 *	@return						true on success, false otherwise
 		 *
 		 */
 		public function add_directory_to_zip( $zip_file, $add_directory, $excludes = array(), $temporary_zip_directory = '' ) {
+
 			if ( true === $this->_is_experimental ) {
 			
-				pb_backupbuddy::status( 'message', __('Running alternative ZIP system (BETA) based on settings.','it-l10n-backupbuddy' ) );
+				$this->log( 'message', __('Running alternative ZIP system (BETA) based on settings.','it-l10n-backupbuddy' ) );
 			
 			} else {
 			
-				pb_backupbuddy::status( 'message', __('Running standard ZIP system based on settings.','it-l10n-backupbuddy' ) );
+				$this->log( 'message', __('Running standard ZIP system based on settings.','it-l10n-backupbuddy' ) );
 			
 			}
 			
 			// Let's just log if this is a 32 or 64 bit system
 			$php_size = ( pluginbuddy_stat::is_php( pluginbuddy_stat::THIRTY_TWO_BIT ) ) ? "32" : "64" ;
-			pb_backupbuddy::status( 'details', sprintf( __( 'Running under %1$s-bit PHP', 'it-l10n-backupbuddy' ), $php_size ) );
+			$this->log( 'details', sprintf( __( 'Running under %1$s-bit PHP', 'it-l10n-backupbuddy' ), $php_size ) );
 			
 			// Make sure we tell what the sapi is
-			pb_backupbuddy::status( 'details', sprintf( __( 'Server API: %1$s', 'it-l10n-backupbuddy' ), $this->get_sapi_name() ) );			
+			$this->log( 'details', sprintf( __( 'Server API: %1$s', 'it-l10n-backupbuddy' ), $this->get_sapi_name() ) );			
 					
 			$zip_methods = array();
 			$sanitized_excludes = array();
-			$listmaker = NULL;
 			
 			// Set some additional system excludes here for now - these are all from the site install root
 			$additional_excludes = array( self::NORM_DIRECTORY_SEPARATOR . 'importbuddy' . self::NORM_DIRECTORY_SEPARATOR,
@@ -1058,29 +2214,29 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 					case "1":
 						// Best Available
 						$zip_methods = $this->get_best_zip_methods( array( 'is_archiver' ) );
-						pb_backupbuddy::status( 'details', __('Using Best Available zip method based on settings.','it-l10n-backupbuddy' ) );
+						$this->log( 'details', __('Using Best Available zip method based on settings.','it-l10n-backupbuddy' ) );
 						break;
 					case "2":
 						// All Available
 						$zip_methods = $this->_zip_methods;
-						pb_backupbuddy::status( 'details', __('Using All Available zip methods in preferred order based on settings.','it-l10n-backupbuddy' ) );
+						$this->log( 'details', __('Using All Available zip methods in preferred order based on settings.','it-l10n-backupbuddy' ) );
 						break;
 					case "3":
 						// Force Compatibility
 						$zip_methods = $this->get_compatibility_zip_methods();				
-						pb_backupbuddy::status( 'message', __('Using Forced Compatibility zip method based on settings.','it-l10n-backupbuddy' ) );
+						$this->log( 'message', __('Using Forced Compatibility zip method based on settings.','it-l10n-backupbuddy' ) );
 						break;
 					default:
 						// Hmm...unrecognized value - emergency compatibility
 						$zip_methods = $this->get_compatibility_zip_methods();				
-						pb_backupbuddy::status( 'message', sprintf( __('Forced Compatibility Mode as Zip Method Strategy setting not recognized: %1$s','it-l10n-backupbuddy' ), $zip_method_strategy ) );
+						$this->log( 'message', sprintf( __('Forced Compatibility Mode as Zip Method Strategy setting not recognized: %1$s','it-l10n-backupbuddy' ), $zip_method_strategy ) );
 				}
 				
 			} else {
 			
 				// We got no or an invalid zip method strategy which is a bad situation - emergency compatibility is the order of the day
 				$zip_methods = $this->get_compatibility_zip_methods();				
-				pb_backupbuddy::status( 'message', __('Forced Compatibility Mode as Zip Method Strategy not set or setting not recognized.','it-l10n-backupbuddy' ) );
+				$this->log( 'message', __('Forced Compatibility Mode as Zip Method Strategy not set or setting not recognized.','it-l10n-backupbuddy' ) );
 			
 			}
 			
@@ -1088,14 +2244,14 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			if ( empty( $zip_methods ) ) {
 			
 				// Hmm, we don't seem to have any available methods, oops, best go no further
-				pb_backupbuddy::status( 'details', __('Failed to create a Zip Archive file - no available methods.','it-l10n-backupbuddy' ) );
+				$this->log( 'details', __('Failed to create a Zip Archive file - no available methods.','it-l10n-backupbuddy' ) );
 				
 				// We should have a temporary directory, must get rid of it, can simply rmdir it as it will (should) be empty
 				if ( !empty( $temporary_zip_directory ) && file_exists( $temporary_zip_directory ) ) {
 					
 					if ( !rmdir( $temporary_zip_directory ) ) {
 					
-						pb_backupbuddy::status( 'details', __('Temporary directory could not be deleted: ','it-l10n-backupbuddy' ) . $temporary_zip_directory );
+						$this->log( 'details', __('Temporary directory could not be deleted: ','it-l10n-backupbuddy' ) . $temporary_zip_directory );
 					
 					}
 						
@@ -1105,14 +2261,14 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 				
 			}
 			
-			pb_backupbuddy::status( 'details', __('Creating ZIP file','it-l10n-backupbuddy' ) . ' `' . $zip_file . '`. ' . __('Adding directory','it-l10n-backupbuddy' ) . ' `' . $add_directory . '`. ' . __('Excludes','it-l10n-backupbuddy' ) . ': ' . implode( ',', $excludes ) );
+			$this->log( 'details', __('Creating ZIP file','it-l10n-backupbuddy' ) . ' `' . $zip_file . '`. ' . __('Adding directory','it-l10n-backupbuddy' ) . ' `' . $add_directory . '`. ' . __('Excludes','it-l10n-backupbuddy' ) . ': ' . implode( ',', $excludes ) );
 			
 			// We need the classes for being able to build backup file list
 			require_once( pb_backupbuddy::plugin_path() . '/lib/' . $this->_whereami . '/zbdir.php' );
 			if ( !class_exists( 'pluginbuddy_zbdir' ) ) {
 			
 				// Hmm, require_once() didn't bomb but we haven't got the class we expect - bail out
-				pb_backupbuddy::status( 'details', __('Unable to load classes for backup file list builder.','it-l10n-backupbuddy' ) );
+				$this->log( 'details', __('Unable to load classes for backup file list builder.','it-l10n-backupbuddy' ) );
 				
 				return false;
 
@@ -1132,21 +2288,30 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 
 					$class_name = 'pluginbuddy_zbzip' . $method_tag;
 		
+					// Zipper will initially inherit our logger and our
+					// process monitor
 					$zipper = new $class_name( $this );
+					
+					// Now override logger - will define a prefix here
+					$zipper->set_logger( $this->_default_child_logger );
 					
 					// Set these on specific zipper based on the values we derived at construnction or
 					// overridden by subsequent method calls
 					$zipper->set_compression( $this->get_compression() );
 					$zipper->set_ignore_symlinks( $this->get_ignore_symlinks() );
 					$zipper->set_ignore_warnings( $this->get_ignore_warnings() );
-					
+					$zipper->set_step_period( $this->get_step_period() );
+					$zipper->set_burst_gap( $this->get_burst_gap() );
+					$zipper->set_min_burst_content( $this->get_min_burst_content() );
+					$zipper->set_max_burst_content( $this->get_max_burst_content() );
+				
 					// We need to tell the method what details belong to it
 					$zipper->set_method_details( $this->_zip_methods_details[ $method_tag ] );
 					
 					// Tell the method the server api in use
 					$zipper->set_sapi_name( $this->get_sapi_name() );
 					
-					pb_backupbuddy::status( 'details', __('Trying ', 'it-l10n-backupbuddy' ) . $method_tag . __(' method for ZIP.','it-l10n-backupbuddy' ) );
+					$this->log( 'details', __('Trying ', 'it-l10n-backupbuddy' ) . $method_tag . __(' method for ZIP.','it-l10n-backupbuddy' ) );
 					
 					// As we are looping make sure we have no stale file information
 					clearstatcache();
@@ -1163,20 +2328,29 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 					}
 					
 					// Now we are ready to try and produce the backup
-					if ( $zipper->create( $zip_file, $add_directory, $sanitized_excludes, $temporary_zip_directory ) === true ) {
+					if (  true === ( $result = $zipper->create( $zip_file, $add_directory, $sanitized_excludes, $temporary_zip_directory ) ) ) {
 					
 						// Got a valid zip file so we can just return - method will have cleaned up the temporary directory
-						pb_backupbuddy::status( 'details', __('The ', 'it-l10n-backupbuddy' ) . $method_tag . __(' method for ZIP was successful.','it-l10n-backupbuddy' ) );
+						$this->log( 'details', __('The ', 'it-l10n-backupbuddy' ) . $method_tag . __(' method for ZIP was successful.','it-l10n-backupbuddy' ) );
 						unset( $zipper );
 						
 						// We have to return here because we cannot break out of foreach
 						return true;
+						
+					} elseif ( is_array( $result ) ) {
+					
+						// Didn't finish zip creation on that step so we need to set up for another step
+						// Add in any addiitonal state information and simply return the state
+						$this->log( 'details', __('The ', 'it-l10n-backupbuddy' ) . $method_tag . __(' method for ZIP partially completed.','it-l10n-backupbuddy' ) );
+						unset( $zipper );
+						return $result;
 	
 					} else {
 					
+						// We failed on the first step for one eason or another - may be an option
+						// to try with another method...
 						// Method will have cleaned up the temporary directory				
-						pb_backupbuddy::status( 'details', __('The ', 'it-l10n-backupbuddy' ) . $method_tag . __(' method for ZIP was unsuccessful.','it-l10n-backupbuddy' ) );
-																
+						$this->log( 'details', __('The ', 'it-l10n-backupbuddy' ) . $method_tag . __(' method for ZIP was unsuccessful.','it-l10n-backupbuddy' ) );
 						unset( $zipper );
 						
 					}
@@ -1184,14 +2358,122 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 				} else {
 				
 					// This method is not considered suitable (reliable enough) for creating archives or lacked zip capability
-					pb_backupbuddy::status( 'details', __('The ','it-l10n-backupbuddy' ) . $method_tag . __(' method is not currently supported for backup.','it-l10n-backupbuddy' ) );					
+					$this->log( 'details', __('The ','it-l10n-backupbuddy' ) . $method_tag . __(' method is not currently supported for backup.','it-l10n-backupbuddy' ) );					
 				
 				}
 				
 			}
 			
 			// If we get here then have failed in all attempts
-			pb_backupbuddy::status( 'details', __('Failed to create a Zip Archive file with any nominated method.','it-l10n-backupbuddy' ) );
+			$this->log( 'details', __('Failed to create a Zip Archive file with any nominated method.','it-l10n-backupbuddy' ) );
+			
+			return false;
+	
+		}
+
+		/**
+		 *	grow_zip()
+		 *
+		 *	This is called after the first step and carries on growing the zip with he already
+		 *	calculated archive content
+		 *
+		 *	@param	string	$zip_file					Full path & filename of ZIP file to grow.
+		 *	@param	string	$temporary_zip_directory	Full directory path to directory were we are working
+		 *	@param	array	$state						State array that we need to pick up where we left off
+		 *
+		 *	@return	mixed								true on completion of archive, array for continuation, false on failure
+		 *
+		 */
+		public function grow_zip( $zip_file, $temporary_zip_directory, $state ) {
+			
+			// Initialize the zip method tag of the method we are using
+			$zip_methods = array( $state[ 'zipbuddy' ][ 'mt' ] );
+			
+			// Iterate over the methods - once we succeed just return directly otherwise drop through
+			foreach ( $zip_methods as $method_tag ) {
+			
+				// First make sure we can archive with this method
+				if ( $this->_zip_methods_details[ $method_tag ][ 'attr' ][ 'is_archiver' ] === true ) {
+
+					$class_name = 'pluginbuddy_zbzip' . $method_tag;
+		
+					// Zipper will initially inherit our logger and
+					// our process monitor
+					$zipper = new $class_name( $this );
+					
+					// Now override logger - will define a prefix here
+					$zipper->set_logger( $this->_default_child_logger );
+					
+					// Set these on specific zipper based on the values we derived at construnction or
+					// overridden by subsequent method calls
+					$zipper->set_compression( $this->get_compression() );
+					$zipper->set_ignore_symlinks( $this->get_ignore_symlinks() );
+					$zipper->set_ignore_warnings( $this->get_ignore_warnings() );
+					$zipper->set_step_period( $state[ 'zipper' ][ 'sp' ] );
+					$zipper->set_burst_gap( $this->get_burst_gap() );
+					$zipper->set_min_burst_content( $this->get_min_burst_content() );
+					$zipper->set_max_burst_content( $this->get_max_burst_content() );
+					
+					// We need to tell the method what details belong to it
+					$zipper->set_method_details( $this->_zip_methods_details[ $method_tag ] );
+					
+					// Tell the method the server api in use
+					$zipper->set_sapi_name( $this->get_sapi_name() );
+					
+					$this->log( 'details', __('Trying ', 'it-l10n-backupbuddy' ) . $method_tag . __(' method for ZIP.','it-l10n-backupbuddy' ) );
+					
+					// As we are looping make sure we have no stale file information
+					clearstatcache();
+					
+					// The temporary zip directory _must_ exist
+					if ( !empty( $temporary_zip_directory ) ) {
+					
+						if ( !file_exists( $temporary_zip_directory ) ) { // Create temp dir if it does not exist.
+						
+							mkdir( $temporary_zip_directory );
+							
+						}
+						
+					}
+					
+					// Now we are ready to try and produce the backup
+					if (  true === ( $result = $zipper->grow( $zip_file, $temporary_zip_directory, $state ) ) ) {
+					
+						// Got a valid zip file so we can just return - method will have cleaned up the temporary directory
+						$this->log( 'details', __('The ', 'it-l10n-backupbuddy' ) . $method_tag . __(' method for ZIP was successful.','it-l10n-backupbuddy' ) );
+						unset( $zipper );
+						
+						// We have to return here because we cannot break out of foreach
+						return true;
+						
+					} elseif ( is_array( $result ) ) {
+					
+						// Didn't finish zip creation on that step so we need to set up for another step
+						// Add in any addiitonal state information and simply return the state
+						$this->log( 'details', __('The ', 'it-l10n-backupbuddy' ) . $method_tag . __(' method for ZIP partially completed.','it-l10n-backupbuddy' ) );
+						unset( $zipper );
+						return $result;
+	
+					} else {
+					
+						// We failed on a continuation step so we are done really...
+						// Method will have cleaned up the temporary directory				
+						$this->log( 'details', __('The ', 'it-l10n-backupbuddy' ) . $method_tag . __(' method for ZIP was unsuccessful.','it-l10n-backupbuddy' ) );
+						unset( $zipper );
+						
+					}
+				
+				} else {
+				
+					// This method is not considered suitable (reliable enough) for creating archives or lacked zip capability
+					$this->log( 'details', __('The ','it-l10n-backupbuddy' ) . $method_tag . __(' method is not currently supported for backup.','it-l10n-backupbuddy' ) );					
+				
+				}
+				
+			}
+			
+			// If we get here then have failed in all attempts
+			$this->log( 'details', __('Failed to create a Zip Archive file with any nominated method.','it-l10n-backupbuddy' ) );
 			
 			return false;
 	
@@ -1221,24 +2503,24 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			if ( $force_compatibility_mode == 'ziparchive' ) {
 
 				$zip_methods = array( 'ziparchive' );				
-				pb_backupbuddy::status( 'message', __('Forced compatibility unzip method (ZipArchive; medium speed) based on settings.','it-l10n-backupbuddy' ) );
+				$this->log( 'message', __('Forced compatibility unzip method (ZipArchive; medium speed) based on settings.','it-l10n-backupbuddy' ) );
 				
 			} elseif ( $force_compatibility_mode == 'pclzip' ) {
 			
 				$zip_methods = array( 'pclzip' );				
-				pb_backupbuddy::status( 'message', __('Forced compatibility unzip method (PCLZip; slow speed) based on settings.','it-l10n-backupbuddy' ) );			
+				$this->log( 'message', __('Forced compatibility unzip method (PCLZip; slow speed) based on settings.','it-l10n-backupbuddy' ) );			
 			
 			} else {
 			
 				$zip_methods = $this->_zip_methods;
-				pb_backupbuddy::status( 'details', __('Using all available unzip methods in preferred order.','it-l10n-backupbuddy' ) );
+				$this->log( 'details', __('Using all available unzip methods in preferred order.','it-l10n-backupbuddy' ) );
 			}
 						
 			// Better make sure we have some available methods
 			if ( empty( $zip_methods ) ) {
 			
 				// Hmm, we don't seem to have any available methods, oops, best go no further
-				pb_backupbuddy::status( 'details', sprintf( __('Unable to extract backup file contents (%1$s to %2$s): No available unzip methods found.','it-l10n-backupbuddy' ), $zip_file, $destination_directory ) );
+				$this->log( 'details', sprintf( __('Unable to extract backup file contents (%1$s to %2$s): No available unzip methods found.','it-l10n-backupbuddy' ), $zip_file, $destination_directory ) );
 				
 				return false;
 				
@@ -1259,6 +2541,8 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 		
 					$zipper = new $class_name( $this );
 					
+					$zipper->set_logger( $this->_default_child_logger );
+					
 					// We need to tell the method what details belong to it
 					$zipper->set_method_details( $this->_zip_methods_details[ $method_tag ] );
 										
@@ -1277,7 +2561,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 					} else {
 					
 						// The zipper encountered an error so we need to drop through and loop round to try another
-						// We'll not process the result here, just drop through silently (the method will have logged it)			
+						// We'll not process the result here, just drop through silently (the method will have logged it)
 						unset( $zipper );
 						
 					}
@@ -1287,7 +2571,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			}
 			
 			// If we got this far then no method to extract backup content was available or worked
-			pb_backupbuddy::status( 'details', sprintf( __('Unable to extract backup file contents (%1$s to %2$s): No compatible zip method found.','it-l10n-backupbuddy' ), $zip_file, $destination_directory ) );
+			$this->log( 'details', sprintf( __('Unable to extract backup file contents (%1$s to %2$s): No compatible zip method found.','it-l10n-backupbuddy' ), $zip_file, $destination_directory ) );
 			return false;
 			
 		}
@@ -1329,7 +2613,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			if ( empty( $zip_methods ) ) {
 			
 				// Hmm, we don't seem to have any available methods, oops, best go no further
-				pb_backupbuddy::status( 'details', sprintf( __('Unable to extract from backup file (%1$s to %2$s): No available unzip methods found.','it-l10n-backupbuddy' ), $zip_file, $destination ) );
+				$this->log( 'details', sprintf( __('Unable to extract from backup file (%1$s to %2$s): No available unzip methods found.','it-l10n-backupbuddy' ), $zip_file, $destination ) );
 				
 				return false;
 				
@@ -1337,7 +2621,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			
 			if ( !( file_exists( $destination_directory ) && is_dir( $destination_directory ) && is_writable( $destination_directory ) ) ) {
 			
-				pb_backupbuddy::status( 'details', sprintf( __('Unable to extract from backup file (%1$s to %2$s): %2$s does not exist, is not a directory or is not writeable','it-l10n-backupbuddy' ), $zip_file, $destination_directory ) );
+				$this->log( 'details', sprintf( __('Unable to extract from backup file (%1$s to %2$s): %2$s does not exist, is not a directory or is not writeable','it-l10n-backupbuddy' ), $zip_file, $destination_directory ) );
 			
 				return false;
 				
@@ -1357,6 +2641,8 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 					$class_name = 'pluginbuddy_zbzip' . $method_tag;
 		
 					$zipper = new $class_name( $this );
+					
+					$zipper->set_logger( $this->_default_child_logger );
 					
 					// We need to tell the method what details belong to it
 					$zipper->set_method_details( $this->_zip_methods_details[ $method_tag ] );
@@ -1386,7 +2672,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			}
 			
 			// If we got this far then no method to extract from backup content was available or worked
-			pb_backupbuddy::status( 'details', sprintf( __('Unable to extract from backup file (%1$s to %2$s): No compatible zip method found.','it-l10n-backupbuddy' ), $zip_file, $destination_directory ) );
+			$this->log( 'details', sprintf( __('Unable to extract from backup file (%1$s to %2$s): No compatible zip method found.','it-l10n-backupbuddy' ), $zip_file, $destination_directory ) );
 			return false;
 			
 		}
@@ -1413,7 +2699,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			if ( empty( $zip_methods ) ) {
 			
 				// Hmm, we don't seem to have any available methods, oops, best go no further
-				pb_backupbuddy::status( 'details', __('Failed to check file exists - no available methods.','it-l10n-backupbuddy' ) );
+				$this->log( 'details', __('Failed to check file exists - no available methods.','it-l10n-backupbuddy' ) );
 				
 				return false;
 				
@@ -1431,6 +2717,8 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 		
 					$zipper = new $class_name( $this );
 					
+					$zipper->set_logger( $this->_default_child_logger );
+
 					// We need to tell the method what details belong to it
 					$zipper->set_method_details( $this->_zip_methods_details[ $method_tag ] );
 										
@@ -1459,7 +2747,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			}
 			
 			// If we got this far then no method to check backup content was available or worked
-			pb_backupbuddy::status( 'details', sprintf( __('Unable to check if file exists (looking for %1$s in %2$s): No compatible zip method found.','it-l10n-backupbuddy' ), $locate_file, $zip_file ) );
+			$this->log( 'details', sprintf( __('Unable to check if file exists (looking for %1$s in %2$s): No compatible zip method found.','it-l10n-backupbuddy' ), $locate_file, $zip_file ) );
 			return false;
 			
 		}
@@ -1481,7 +2769,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			if ( empty( $zip_methods ) ) {
 			
 				// Hmm, we don't seem to have any available methods, oops, best go no further
-				pb_backupbuddy::status( 'details', __('Failed to list backup file contents - no available methods.','it-l10n-backupbuddy' ) );
+				$this->log( 'details', __('Failed to list backup file contents - no available methods.','it-l10n-backupbuddy' ) );
 				
 				return false;
 				
@@ -1498,6 +2786,8 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 					$class_name = 'pluginbuddy_zbzip' . $method_tag;
 		
 					$zipper = new $class_name( $this );
+					
+					$zipper->set_logger( $this->_default_child_logger );
 					
 					// We need to tell the method what details belong to it
 					$zipper->set_method_details( $this->_zip_methods_details[ $method_tag ] );
@@ -1527,7 +2817,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			}
 			
 			// If we got this far then no method to list backup file content was available or worked
-			pb_backupbuddy::status( 'details', sprintf( __('Unable to check file content of backup (%1$s): No compatible zip method found.','it-l10n-backupbuddy' ), $zip_file ) );
+			$this->log( 'details', sprintf( __('Unable to check file content of backup (%1$s): No compatible zip method found.','it-l10n-backupbuddy' ), $zip_file ) );
 			return false;
 			
 		}
@@ -1550,7 +2840,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			if ( empty( $zip_methods ) ) {
 			
 				// Hmm, we don't seem to have any available methods, oops, best go no further
-				pb_backupbuddy::status( 'details', __('Failed to set comment in backup file - no available methods.','it-l10n-backupbuddy' ) );
+				$this->log( 'details', __('Failed to set comment in backup file - no available methods.','it-l10n-backupbuddy' ) );
 				
 				return false;
 				
@@ -1571,6 +2861,8 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 					$class_name = 'pluginbuddy_zbzip' . $method_tag;
 					
 					$zipper = new $class_name( $this );
+					
+					$zipper->set_logger( $this->_default_child_logger );
 					
 					// We need to tell the method what details belong to it
 					$zipper->set_method_details( $this->_zip_methods_details[ $method_tag ] );
@@ -1600,7 +2892,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			}
 			
 			// If we got this far then couldn't set a comment at all - either no available method or all method failed
-			pb_backupbuddy::status( 'details', sprintf( __('Unable to set comment in file %1$s: No compatible zip method found or all methods failed - note stored internally only.','it-l10n-backupbuddy' ), $zip_file ) );
+			$this->log( 'details', sprintf( __('Unable to set comment in file %1$s: No compatible zip method found or all methods failed - note stored internally only.','it-l10n-backupbuddy' ), $zip_file ) );
 
 			// Return message for display - maybe should return false and have caller display it's own message?
 			$message = "\n\nUnable to set note in file.\nThe note will only be stored internally in your settings and not in the zip file itself.";
@@ -1626,7 +2918,7 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			if ( empty( $zip_methods ) ) {
 				
 				// Hmm, we don't seem to have any available methods, oops, best go no further
-				pb_backupbuddy::status( 'details', __('Failed to get comment from backup file - no available methods.','it-l10n-backupbuddy' ) );
+				$this->log( 'details', __('Failed to get comment from backup file - no available methods.','it-l10n-backupbuddy' ) );
 				
 				return false;
 				
@@ -1641,6 +2933,8 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 					$class_name = 'pluginbuddy_zbzip' . $method_tag;
 					
 					$zipper = new $class_name( $this );
+					
+					$zipper->set_logger( $this->_default_child_logger );
 					
 					// We need to tell the method what details belong to it
 					$zipper->set_method_details( $this->_zip_methods_details[ $method_tag ] );
@@ -1697,54 +2991,12 @@ if ( !class_exists( "pluginbuddy_zipbuddy" ) ) {
 			}
 			
 			// If we got this far then couldn't get a comment at all - either no available method or all method failed
-			pb_backupbuddy::status( 'details', sprintf( __('Unable to get comment in file %1$s: No compatible zip method found or all methods failed.','it-l10n-backupbuddy' ), $zip_file ) );
+			$this->log( 'details', sprintf( __('Unable to get comment in file %1$s: No compatible zip method found or all methods failed.','it-l10n-backupbuddy' ), $zip_file ) );
 
 			return false;
-			
-		}
 				
-		// FOR FUTURE USE; NOT YET IMPLEMENTED. Use to check .sql file is non-empty.
-		function file_stats( $zip_file, $locate_file, $leave_open = false ) {
-			if ( in_array( 'ziparchive', $this->_zip_methods ) ) {
-				$this->_zip = new ZipArchive;
-				if ( $this->_zip->open( $zip_file ) === true ) {
-					if ( ( $stats = $this->_zip->statName( $locate_file ) ) === false ) { // File not found in zip.
-						$this->_zip->close();
-						pb_backupbuddy::status( 'details', __('File not found (ziparchive) for stats','it-l10n-backupbuddy' ) . ': ' . $locate_file );
-						return false;
-					}
-					$this->_zip->close();
-					return $stats;
-				} else {
-					pb_backupbuddy::status( 'details', sprintf( __('ZipArchive failed to open file to check stats (looking in %1$s).','it-l10n-backupbuddy' ), $zip_file ) );
-					
-					return false;
-				}
-			}
-			
-			// If we made it this far then ziparchive not available/failed.
-			if ( in_array( 'pclzip', $this->_zip_methods ) ) {
-				require_once( ABSPATH . 'wp-admin/includes/class-pclzip.php' );
-				$this->_zip = new PclZip( $zip_file );
-				if ( ( $file_list = $this->_zip->listContent() ) == 0 ) { // If zero, zip is corrupt or empty.
-					pb_backupbuddy::status( 'details', $this->_zip->errorInfo( true ) );
-				} else {
-					foreach( $file_list as $file ) {
-						if ( $file['filename'] == $locate_file ) { // Found file.
-							return true;
-						}
-					}
-					pb_backupbuddy::status( 'details', __('File not found (pclzip)','it-l10n-backupbuddy' ) . ': ' . $locate_file );
-					return false;
-				}
-			} else {
-				pb_backupbuddy::status( 'details', __('Unable to check if file exists: No compatible zip method found.','it-l10n-backupbuddy' ) );
-				return false;
-			}
 		}
 			
 	} // End class
-	
-	//$pluginbuddy_zipbuddy = new pluginbuddy_zipbuddy( $this->_options['backup_directory'] );
 
 }

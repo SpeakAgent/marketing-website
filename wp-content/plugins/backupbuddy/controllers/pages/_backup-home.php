@@ -34,7 +34,7 @@ jQuery(document).ready( function() {
 	jQuery('#screen-meta-links').append(
 		'<div id="backupbuddy-meta-link-wrap" class="hide-if-no-js screen-meta-toggle">' +
 			'<a href="" class="show-settings pb_backupbuddy_begintour"><?php _e( "Tour Page", "it-l10n-backupbuddy" ); ?></a>' +
-			'<a href="?page=pb_backupbuddy_backup&wizard=1" class="show-settings"><?php _e( "Quick Setup", "it-l10n-backupbuddy" ); ?></a>' +
+			'<a href="?page=pb_backupbuddy_backup&wizard=1" class="show-settings"><?php _e( "Quick Setup Wizard", "it-l10n-backupbuddy" ); ?></a>' +
 		'</div>'
 	);
 });
@@ -68,14 +68,21 @@ jQuery(window).load(function() {
 
 
 backupbuddy_core::versions_confirm();
-
+echo '<!-- BB-versions_confirm done-->';
 
 $alert_message = array();
 $preflight_checks = backupbuddy_core::preflight_check();
+echo '<!-- BB-preflight_check done -->';
+$disableBackingUp = false;
 foreach( $preflight_checks as $preflight_check ) {
 	if ( $preflight_check['success'] !== true ) {
 		//$alert_message[] = $preflight_check['message'];
 		pb_backupbuddy::disalert( $preflight_check['test'], $preflight_check['message'] );
+		if ( 'backup_dir_permissions' == $preflight_check['test'] ) {
+			$disableBackingUp = true;
+		} elseif ( 'temp_dir_permissions' == $preflight_check['test'] ) {
+			$disableBackingUp = true;
+		}
 	}
 }
 if ( count( $alert_message ) > 0 ) {
@@ -83,7 +90,8 @@ if ( count( $alert_message ) > 0 ) {
 }
 
 
-
+echo '<!-- BB-listing backups -->';
 $view_data['backups'] = backupbuddy_core::backups_list( 'default' );
+$view_data['disableBackingUp'] = $disableBackingUp;
 pb_backupbuddy::load_view( '_backup-home', $view_data );
 ?>

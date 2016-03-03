@@ -76,7 +76,7 @@ class pb_backupbuddy_ui {
 	 *	@return		null/string				Returns null if $echo is true; else returns string with HTML.
 	 */
 	public function title( $title, $echo = true ) {
-		$return = '<h2><span class="backupbuddy-icon-drive" style="font-size: 1.2em; vertical-align: -4px;"></span> ' . $title . '</h2><br />';
+		$return = '<h1><span class="backupbuddy-icon-drive" style="font-size: 1.2em; vertical-align: -4px;"></span> ' . $title . '</h1><br />';
 		if ( $echo === true ) {
 			echo $return;
 		} else {
@@ -263,7 +263,7 @@ class pb_backupbuddy_ui {
 				}
 			}
 			
-			echo '			<div class="row-actions">'; //  style="margin:0; padding:0;"
+			echo '			<div class="row-actions" style="margin-top: 10px;">'; //  style="margin:0; padding:0;"
 			$i = 0;
 			foreach ( $settings['hover_actions'] as $action_slug => $action_title ) { // Display all hover actions.
 				$i++;
@@ -276,16 +276,21 @@ class pb_backupbuddy_ui {
 				} else {
 					$hover_action_column_value = '';
 				}
-				
-				if ( strstr( $action_slug, 'http' ) === false ) { // Word hover action slug.
+				//echo 'slug: ' . $action_slug;
+				if ( strstr( $action_slug, '/' ) === false ) { // Word hover action slug.
 					$hover_link= pb_backupbuddy::page_url() . '&' . $action_slug . '=' . $item_id . '&value=' . $hover_action_column_value;
 				} else { // URL hover action slug so just append value to URL.
 					$hover_link = $action_slug . $hover_action_column_value;
 				}
+
+				// Some host's don't allow get params that end in .zip
+				if ( '.zip' == substr( $hover_link, -4 ) ) {
+					$hover_link .= '&bub_rand=' . rand( 100, 999 );
+				}
 				
 				echo '<a href="' . $hover_link . '" class="pb_' . pb_backupbuddy::settings( 'slug' ) . '_hoveraction_' . $action_slug . '" rel="' . $hover_action_column_value . '">' . $action_title . '</a>';
 				if ( $i < count( $settings['hover_actions'] ) ) {
-					echo ' | ';
+					echo ' &nbsp;|&nbsp; ';
 				}
 			}
 			echo '			</div>
@@ -371,7 +376,7 @@ class pb_backupbuddy_ui {
 		
 		if ( $feed_html == '' ) {
 			foreach ( (array) $rss_items as $item ) {
-				$feed_html .= '<li style="list-style-type: none;"><a href="' . $item->get_permalink() . '" target="_new">';
+				$feed_html .= '<li style="list-style-type: none;"><a href="' . $item->get_permalink() . '" target="_blank">';
 				$title =  $item->get_title(); //, ENT_NOQUOTES, 'UTF-8');
 				if ( $replace != '' ) {
 					$title = str_replace( $replace, '', $title );
@@ -410,7 +415,10 @@ class pb_backupbuddy_ui {
 	 *	@return		string/null					If not echoing tip then the string will be returned. When echoing there is no return.
 	 */
 	public function tip( $message, $title = '', $echo_tip = true ) {
-		$tip = ' <a class="pluginbuddy_tip" title="' . $title . ' - ' . $message . '"><img src="' . pb_backupbuddy::plugin_url() . '/pluginbuddy/images/pluginbuddy_tip.png" alt="(?)" /></a>';
+		if ( '' != $title ) {
+			$message = $title . ' - ' . $message;
+		}
+		$tip = ' <a class="pluginbuddy_tip" title="' . $message . '"><img src="' . pb_backupbuddy::plugin_url() . '/pluginbuddy/images/pluginbuddy_tip.png" alt="(?)" /></a>';
 		if ( $echo_tip === true ) {
 			echo $tip;
 		} else {
@@ -430,10 +438,10 @@ class pb_backupbuddy_ui {
 	 *	@param		int			$error_code		OPTIONAL! Error code number to use in linking in the wiki for easy reference.
 	 *	@return		null
 	 */
-	public function alert( $message, $error = false, $error_code = '', $rel_tag = '' ) {
+	public function alert( $message, $error = false, $error_code = '', $rel_tag = '', $more_css = '' ) {
 		$log_error = false;
 
-		echo '<div id="message" style="padding: 9px;" rel="' . $rel_tag . '" class="pb_backupbuddy_alert ';
+		echo '<div id="message" style="padding: 9px; ' . $more_css . '" rel="' . $rel_tag . '" class="pb_backupbuddy_alert ';
 		if ( $error === false ) {
 			echo 'updated fade';
 		} else {
@@ -441,7 +449,7 @@ class pb_backupbuddy_ui {
 			$log_error = true;
 		}
 		if ( $error_code != '' ) {
-			$message .= ' <a href="http://ithemes.com/codex/page/BackupBuddy:_Error_Codes#' . $error_code . '" target="_new"><i>' . pb_backupbuddy::settings( 'name' ) . ' Error Code ' . $error_code . ' - Click for more details.</i></a>';
+			$message .= ' <a href="http://ithemes.com/codex/page/BackupBuddy:_Error_Codes#' . $error_code . '" target="_blank"><i>' . pb_backupbuddy::settings( 'name' ) . ' Error Code ' . $error_code . ' - Click for more details.</i></a>';
 			$log_error = true;
 		}
 		if ( $log_error === true ) {
@@ -462,11 +470,11 @@ class pb_backupbuddy_ui {
 	 *	@param		int			$error_code		OPTIONAL! Error code number to use in linking in the wiki for easy reference.
 	 *	@return		null
 	 */
-	public function disalert( $unique_id, $message, $error = false ) {
+	public function disalert( $unique_id, $message, $error = false, $more_css = '' ) {
 		
-		if ( ! isset( pb_backupbuddy::$options['disalerts'][$unique_id] ) ) {
-			$message = '<a style="float: right;" class="pb_backupbuddy_disalert" href="#" title="' . __( 'Dismiss this alert. Unhide dismissed alerts on the Settings page.', 'it-l10n-backupbuddy' ) . '" alt="' . pb_backupbuddy::ajax_url( 'disalert' ) . '"><b>' . __( 'Dismiss', 'it-l10n-backupbuddy' ) . '</b></a><div style="margin-right: 60px;">' . $message . '</div>';
-			$this->alert( $message, $error, '', $unique_id );
+		if ( ( '' == $unique_id ) || ( ! isset( pb_backupbuddy::$options['disalerts'][$unique_id] ) ) ) {
+			$message = '<a style="float: right;" class="pb_backupbuddy_disalert" href="javascript:void(0);" title="' . __( 'Dismiss this alert. Unhide dismissed alerts on the Settings page.', 'it-l10n-backupbuddy' ) . '" alt="' . pb_backupbuddy::ajax_url( 'disalert' ) . '"><b>' . __( 'Dismiss', 'it-l10n-backupbuddy' ) . '</b></a><div style="margin-right: 60px;">' . $message . '</div>';
+			$this->alert( $message, $error, '', $unique_id, $more_css );
 		} else {
 			echo '<!-- Previously Dismissed Alert: `' . htmlentities( $message ) . '` -->';
 		}
@@ -489,6 +497,36 @@ class pb_backupbuddy_ui {
 	 *	@return		string/null					If not echoing tip then the string will be returned. When echoing there is no return.
 	 */
 	public function video( $video_key, $title = '', $echo_tip = true ) {
+		
+		self::enqueue_thickbox();
+		
+		if ( strstr( $video_key, '#' ) ) {
+			$video = explode( '#', $video_key );
+			$video[1] = '&start=' . $video[1];
+		} else {
+			$video[0] = $video_key;
+			$video[1] = '';
+		}
+		
+		$tip = '<a target="_blank" href="http://www.youtube.com/embed/' . urlencode( $video[0] ) . '?autoplay=1' . $video[1] . '&TB_iframe=1&width=600&height=400" class="thickbox pluginbuddy_tip" title="Video Tutorial - ' . $title . '"><img src="' . pb_backupbuddy::plugin_url() . '/pluginbuddy/images/pluginbuddy_play.png" alt="(video)" /></a>';
+		if ( $echo_tip === true ) {
+			echo $tip;
+		} else {
+			return $tip;
+		}
+	} // End video().
+	
+	
+	
+	/**
+	 * pb_backupbuddy::enqueue_thickbox()
+	 *
+	 * Enqueues the required scripts / styles needed to use thickbox
+	 *
+	 * @return null
+	 */
+	public function enqueue_thickbox() {
+
 		if ( !defined( 'PB_IMPORTBUDDY' ) ) {
 			global $wp_scripts;
 			if ( is_object( $wp_scripts ) ) {
@@ -499,22 +537,7 @@ class pb_backupbuddy_ui {
 				}
 			}
 		}
-		
-		if ( strstr( $video_key, '#' ) ) {
-			$video = explode( '#', $video_key );
-			$video[1] = '&start=' . $video[1];
-		} else {
-			$video[0] = $video_key;
-			$video[1] = '';
-		}
-
-		$tip = '<a target="_new" href="http://www.youtube.com/embed/' . urlencode( $video[0] ) . '?autoplay=1' . $video[1] . '&TB_iframe=1&width=600&height=400" class="thickbox pluginbuddy_tip" title="Video Tutorial - ' . $title . '"><img src="' . pb_backupbuddy::plugin_url() . '/pluginbuddy/images/pluginbuddy_play.png" alt="(video)" /></a>';
-		if ( $echo_tip === true ) {
-			echo $tip;
-		} else {
-			return $tip;
-		}
-	} // End video().
+	} // End enqueue_thickbox().
 	
 	
 	
@@ -711,21 +734,28 @@ class pb_backupbuddy_ui {
 		//echo '<link rel="stylesheet" href="' . pb_backupbuddy::plugin_url(); . '/css/admin.css" type="text/css" media="all" />';
 		pb_backupbuddy::load_script( 'admin.js', true );
 		pb_backupbuddy::load_style( 'admin.css', true );
-		pb_backupbuddy::load_script( 'tooltip.js', true );
+		pb_backupbuddy::load_script( 'jquery-ui-tooltip', false );
+		pb_backupbuddy::load_style( 'jQuery-ui-1.11.2.css', true );
 		
 		echo '<body class="wp-core-ui" style="background: inherit;">';
 		if ( $padding === true ) {
-			echo '<div style="padding: 8px; padding-left: 12px; padding-right: 12px;">';
+			echo '<div style="padding: 12px; padding-left: 20px; padding-right: 20px; overflow: scroll;">';
 		} else {
 			echo '<div>';
 		}
+		
 	} // End ajax_header().
 	
 	
-	function ajax_footer() {
+	function ajax_footer( $js_common = true ) {
 		echo '</body>';
 		echo '</div>';
 		echo '</head>';
+		
+		if ( true === $js_common ) {
+			pb_backupbuddy::load_script( 'common' ); // Needed for table 'select all' feature.
+		}
+		
 		echo '</html>';
 	} // End ajax_footer().
 	
@@ -733,5 +763,3 @@ class pb_backupbuddy_ui {
 	
 } // End class pluginbuddy_ui.
 
-
-?>

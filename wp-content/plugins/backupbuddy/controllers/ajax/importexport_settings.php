@@ -1,5 +1,7 @@
 <?php
-if ( ! is_admin() ) { die( 'Access denied.' ); }
+backupbuddy_core::verifyAjaxAccess();
+
+
 // Popup thickbox for importing and exporting settings.
 
 pb_backupbuddy::load();
@@ -17,6 +19,15 @@ if ( pb_backupbuddy::_POST( 'import_settings' ) != '' ) {
 			if ( !isset( $import['data_version'] ) ) { // missing expected content.
 				pb_backupbuddy::alert( 'Unserialized settings data but it did not contain expected data. Import aborted. Insure that you fully copied the settings and did not change any of the text.' );
 			} else { // contains expected content.
+				// Delete any existing scheduled hooks so that imported schedules overwrite existing 'next run' settings
+				$schedules = backupbuddy_api::getSchedules();
+				if ( $schedules ) {
+					foreach ( $schedules as $schedule ) {
+						if ( ! empty( $schedule['id'] ) ) {
+							wp_clear_scheduled_hook( 'backupbuddy_cron', array( 'run_scheduled_backup', array( (int)$schedule['id'] ) ) );
+						}
+					}
+				}
 				pb_backupbuddy::$options = $import;
 				require_once( pb_backupbuddy::plugin_path() . '/controllers/activation.php' ); // Run data migration to upgrade if needed.
 				pb_backupbuddy::save();
