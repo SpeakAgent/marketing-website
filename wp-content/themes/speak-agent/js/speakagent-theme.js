@@ -206,7 +206,7 @@
                         if ((max-chars == 0) && (typeof(counter) != 'undefined')) {
                             $('#i-chars-remaining').addClass('at-limit');
                             if ($('#i-msg-email #i-msg-alert').length == 0){
-                                $('#i-msg-email').append('<p class="i-msg" id="i-msg-alert"><small><strong>Email longer then 30 characters?</strong> <a href="/contact-us">Contact us to make an account for you</a>.</small></p>');
+                                $('#i-msg-email').append(' <small class="i-msg" id="i-msg-alert">. <strong>Email longer then 30 characters?</strong> <a href="/contact-us">Contact us to make an account for you</a>.</small>');
                             }
                             counter.html(max-chars);
                         }
@@ -225,6 +225,7 @@
         // Target Counter for Email Input
         var elem01 = $(".form-request-invite #i-chars-remaining");
         $(".form-request-invite #i-email").limit_characters(30, elem01);
+
         var elem02 = $("#form-redeem-invite #i-chars-remaining");
         $("#form-redeem-invite #r-email").limit_characters(30, elem02);
 

@@ -233,7 +233,7 @@ function print_accept_invite_popup(){
 			<div class="form-group">
 			<label for="r-email">Enter your email. <small class="label-required">required</small></label>
 			<input required type="email" id="r-email" name="r-email" maxlength="30">
-			<p class="i-msg" id="i-msg-email"><small><span id="i-chars-remaining">30</span> characters remaining (<strong>30</strong> character limit). This should be the same email you used to request the invite.</small></p>
+			<p class="i-msg" id="i-msg-email"><small>Please use the email used for the invite. <span id="i-chars-remaining">30</span> characters remaining (<strong>30</strong> character limit)</small></p>
 			</div>
 			<div class="form-group">
 			<label for="r-code">Enter your invite code. <small class="label-required">required</small></label>
