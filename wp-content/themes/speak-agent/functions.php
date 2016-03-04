@@ -155,7 +155,7 @@ function print_form_invite_req(){
 				<div class="form-group">
 				<label for="i-email">Enter your email. <small class="label-required">required</small></label>
 				<input required type="email" id="i-email" name="i-email" maxlength="30">
-				<p class="i-msg" id="i-msg-email"><small><span id="i-chars-remaining">30</span> characters remaining (<strong>30</strong> character limit)</small></p>
+				<p class="i-msg" id="i-msg-email"><small><span id="i-chars-remaining">30</span> characters remaining (<strong>30</strong> character limit).</small></p>
 				</div>
 				<div class="form-group">
 				<label for="i-reason">Tell us why you\'d like an invitation. <small class="label-required">required</small></label>
@@ -233,7 +233,7 @@ function print_accept_invite_popup(){
 			<div class="form-group">
 			<label for="r-email">Enter your email. <small class="label-required">required</small></label>
 			<input required type="email" id="r-email" name="r-email" maxlength="30">
-			<p class="i-msg" id="i-msg-email"><small>Please use the email used for the invite. <span id="i-chars-remaining">30</span> characters remaining (<strong>30</strong> character limit)</small></p>
+			<p class="i-msg" id="i-msg-email"><small>Enter the email address where you received your invitation.<br /><span id="i-chars-remaining">30</span> characters remaining (<strong>30</strong> character limit).</small></p>
 			</div>
 			<div class="form-group">
 			<label for="r-code">Enter your invite code. <small class="label-required">required</small></label>
