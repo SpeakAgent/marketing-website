@@ -190,6 +190,45 @@
             control: '#r-show-password',
         });
 
+
+        // Add Visual Character Count to Email input form
+        // From http://www.scriptiny.com/2012/09/jquery-input-textarea-limiter/
+        $.fn.extend({
+            limit_characters: function(max, counter){
+                $(this).bind("keydown focus", function(){
+                    var self = this;
+                    window.setTimeout(function(){
+                        var chars = self.value.length;
+                        if(chars > max) {
+                            self.value = self.value.substr(0, max);
+                            chars = max;
+                        }
+                        if ((max-chars == 0) && (typeof(counter) != 'undefined')) {
+                            $('#i-chars-remaining').addClass('at-limit');
+                            if ($('#i-msg-email #i-msg-alert').length == 0){
+                                $('#i-msg-email').append(' <small class="i-msg" id="i-msg-alert"><strong>Email longer than 30 characters?</strong> <a href="/contact-us">Contact us to make an account for you</a>.</small>');
+                            }
+                            counter.html(max-chars);
+                        }
+                        else {
+                            if($('#i-chars-remaining').hasClass('at-limit')){
+                                $('#i-chars-remaining').removeClass('at-limit');
+                                $('#i-msg-email #i-msg-alert').remove();
+                            }
+                            counter.html(max-chars);
+                        }
+                    }, 5);
+                });
+            }
+        });
+
+        // Target Counter for Email Input
+        var elem01 = $(".form-request-invite #i-chars-remaining");
+        $(".form-request-invite #i-email").limit_characters(30, elem01);
+
+        var elem02 = $("#form-redeem-invite #i-chars-remaining");
+        $("#form-redeem-invite #r-email").limit_characters(30, elem02);
+
         // Target your .container, .wrapper, .post, etc. so that Videos become responsive
         $(".entry-content").fitVids();
 
