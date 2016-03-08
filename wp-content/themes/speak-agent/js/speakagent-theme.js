@@ -206,7 +206,7 @@
                         if ((max-chars == 0) && (typeof(counter) != 'undefined')) {
                             $('#i-chars-remaining').addClass('at-limit');
                             if ($('#i-msg-email #i-msg-alert').length == 0){
-                                $('#i-msg-email').append(' <small class="i-msg" id="i-msg-alert"><strong>Email longer then 30 characters?</strong> <a href="/contact-us">Contact us to make an account for you</a>.</small>');
+                                $('#i-msg-email').append(' <small class="i-msg" id="i-msg-alert"><strong>Email longer than 30 characters?</strong> <a href="/contact-us">Contact us to make an account for you</a>.</small>');
                             }
                             counter.html(max-chars);
                         }
