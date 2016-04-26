@@ -484,7 +484,7 @@ class backupbuddy_core {
 			$email_return = get_option('admin_email');
 		}
 		
-		pb_backupbuddy::status( 'details', 'Sending email schedule notification. Subject: `' . $subject . '`; body: `' . $body . '`; recipient(s): `' . $email . '`.' );
+		pb_backupbuddy::status( 'details', 'Sending email schedule notification. Subject: `' . $subject . '`; recipient(s): `' . $email . '`.' );
 		if ( !empty( $email ) ) {
 			if ( function_exists( 'wp_mail' ) ) {
 				wp_mail( $email, $subject, $body, 'From: BackupBuddy <' . $email_return . ">\r\n".'Reply-To: '.get_option('admin_email')."\r\n".'Content-type: text/html;' . "\r\n");
@@ -2460,7 +2460,7 @@ class backupbuddy_core {
 	// Same as detectedMaxExecutionTime EXCEPT takes into account user overrided value in settings (if any).
 	public static function adjustedMaxExecutionTime() {
 		$detected = self::detectMaxExecutionTime();
-		if ( ( '' != pb_backupbuddy::$options['max_execution_time'] ) && ( is_numeric( pb_backupbuddy::$options['max_execution_time'] ) ) ) { // If set and a number, use user-specified runtime.
+		if ( isset( pb_backupbuddy::$options['max_execution_time'] ) && ( '' != pb_backupbuddy::$options['max_execution_time'] ) && ( is_numeric( pb_backupbuddy::$options['max_execution_time'] ) ) ) { // If set and a number, use user-specified runtime.
 			return pb_backupbuddy::$options['max_execution_time'];
 		} else { // Nothing user-specified so user detected value.
 			return $detected;
@@ -2721,7 +2721,7 @@ class backupbuddy_core {
 	 * 
 	 *
 	 */
-	public static function addNotification( $slug, $title, $message, $data = array(), $urgent = false, $time = '' ) {
+	public static function addNotification( $slug, $title, $message = '', $data = array(), $urgent = false, $time = '' ) {
 		
 		if ( '' == $time ) {
 			$time = time();
@@ -2742,6 +2742,7 @@ class backupbuddy_core {
 		$notificationArray = self::getNotifications();
 		
 		// Add to current notifications.
+		do_action( 'backupbuddy_core_add_notification', $notification );
 		$notificationArray[] = $notification;
 		
 		// Only keep last X notifications to prevent buildup.
@@ -2804,6 +2805,12 @@ class backupbuddy_core {
 	
 	
 	public static function verifyHousekeeping() {
+		if ( is_multisite() ) { // For Multisite only run on main Network site.
+			if ( ! is_main_site() ) {
+				return;
+			}
+		}
+		
 		if ( false === wp_next_scheduled( 'backupbuddy_cron', array( 'housekeeping', array() ) ) ) { // if schedule does not exist...
 			backupbuddy_core::schedule_event( time() + ( 60*60 * 2 ), 'daily', 'housekeeping', array() ); // Add schedule.
 		}
@@ -2892,6 +2899,9 @@ class backupbuddy_core {
 		// Remove excluded tables.
 		$tables = array_diff( $tables, $additional_excludes );
 		pb_backupbuddy::status( 'details', 'Database tables after exclusion (' . count( $tables ) . ' tables): `' . implode( ',', $tables ) . '`' );
+		
+		// Remove any duplicate tables.
+		$tables = array_unique( $tables );
 		
 		return array_values( $tables ); // Clean up indexing & return.
 		
@@ -3175,9 +3185,18 @@ class backupbuddy_core {
 	 * Attempts to calculate the actual maximum PHP execution time by writing to a text file once per second the time elapsed since pb_backupbuddy class loaded.
 	 *
 	 */
-	public static function php_runtime_test( $schedule_results = false ) {
+	public static function php_runtime_test( $schedule_results = false, $force_run = false ) {
 		pb_backupbuddy::status( 'details', 'Beginning PHP runtime test function.' );
 		$test_file = backupbuddy_core::getLogDirectory() . 'php_runtime_test.txt'; 
+		
+		// Make sure not running too often, even if scheduled.
+		if ( false === $force_run ) {
+			$elapsed = time() - pb_backupbuddy::$options['last_tested_php_runtime'];
+			if ( $elapsed < pb_backupbuddy::$options['php_runtime_test_minimum_interval'] ) { // Not enough time elapsed since last run.
+				pb_backupbuddy::status( 'details', 'Not enough time elapsed since last PHP runtime test interval. Elapsed: `' . $elapsed . '`. Interval limit: `' . pb_backupbuddy::$options['php_runtime_test_minimum_interval'] . '`.' );
+				return false;
+			}
+		}
 		
 		// If test file already exists, make sure it doesn't look like a test is already running.
 		if ( file_exists( $test_file ) ) {
@@ -3249,6 +3268,87 @@ class backupbuddy_core {
 	
 	
 	
+	/* php_memory_test()
+	 *
+	 * Attempts to calculate the actual maximum PHP memory limit by writing to a text file while increasing memory usage.
+	 *
+	 */
+	public static function php_memory_test( $schedule_results = false, $force_run = false ) {
+		$incrementMB = 1; // How many MB to increment per chunk.
+		
+		pb_backupbuddy::status( 'details', 'Beginning PHP memory test function.' );
+		$test_file = backupbuddy_core::getLogDirectory() . 'php_memory_test.txt'; 
+		
+		// Make sure not running too often, even if scheduled.
+		if ( false === $force_run ) {
+			$elapsed = time() - pb_backupbuddy::$options['last_tested_php_memory'];
+			if ( $elapsed < pb_backupbuddy::$options['php_memory_test_minimum_interval'] ) { // Not enough time elapsed since last run.
+				pb_backupbuddy::status( 'details', 'Not enough time elapsed since last PHP memory test interval. Elapsed: `' . $elapsed . '`. Interval limit: `' . pb_backupbuddy::$options['php_memory_test_minimum_interval'] . '`.' );
+				return false;
+			}
+		}
+		
+		// If test file already exists, make sure it doesn't look like a test is already running.
+		if ( file_exists( $test_file ) ) {
+			if ( false !== ( $last_update_time = filemtime( $test_file ) ) ) { // if we can get filemtime...
+				if ( ( time() - $last_update_time ) < backupbuddy_constants::PHP_MEMORY_RETEST_DELAY ) { // Not enough time has passed since last scan last updated file so it MAY still be going.
+					pb_backupbuddy::status( 'details', 'PHP memory test: Not enough time has passed since the last test updated the file.' );
+					return false;
+				}
+			}
+		}
+		
+		// Open test file for writing.
+		if ( false === ( $fso = @fopen( $test_file, 'w' ) ) ) {
+			return false;
+		}
+		
+		// Schedule results calculation to happen afterwards if enabled.
+		if ( true === $schedule_results ) {
+			// Schedule test results calculation to run.
+			$cronArgs = array();
+			$schedule_result = backupbuddy_core::schedule_single_event( time() + backupbuddy_constants::PHP_MEMORY_RETEST_DELAY + 5, 'php_memory_test_results', $cronArgs );
+			if ( true === $schedule_result ) {
+				pb_backupbuddy::status( 'details', 'PHP memory test results cron event scheduled.' );
+			} else {
+				pb_backupbuddy::status( 'error', 'PHP memory test results cron event FAILED to be scheduled.' );
+			}
+		}
+		
+		// Once per second write to the file the number of seconds elapsed since the test began.
+		pb_backupbuddy::status( 'details', 'Start PHP memory test loops.' );
+		$loopCount = 0;
+		$buffer = '';
+		$loop = true;
+		while( true === $loop ) {
+			$loopCount++;
+			if ( $loopCount > 1000 ) {
+				$loop = false;
+				break;
+			}
+			
+			$buffer .= str_repeat( '-', 1048576 * $incrementMB );
+			
+			$usage = round( memory_get_usage() / 1048576, 2 );
+			
+			//error_log( 'usage:' + usage );
+			
+			@ftruncate( $fso, 0 ); // Erase existing file contents.
+			if ( false === @fwrite( $fso, $usage ) ) { // Update time elapsed into file.
+				$loop = false;
+				break; // Stop since writing failed.
+			}
+		}
+		
+		pb_backupbuddy::status( 'details', 'End PHP memory test loops.' );
+		
+		$buffer = '';
+		@fclose( $fso );
+		
+	} // End php_memory_test().
+	
+	
+	
 	/* php_runtime_test_results()
 	 *
 	 * Stores tested runtime in pb_backupbuddy::$options['tested_php_runtime'], rounded up to next whole number. Note: pb_backupbuddy::$options['tested_php_runtime'] is 0 until test is successful.
@@ -3298,6 +3398,84 @@ class backupbuddy_core {
 		return pb_backupbuddy::$options['tested_php_runtime'];
 		
 	} // End php_runtime_test_results().
+	
+	
+	
+	/* php_memory_test_results()
+	 *
+	 * Stores tested memory in pb_backupbuddy::$options['tested_php_memory'], rounded up to next whole number. Note: pb_backupbuddy::$options['tested_php_memory'] is 0 until test is successful.
+	 *
+	 */
+	public static function php_memory_test_results() {
+		$test_file = backupbuddy_core::getLogDirectory() . 'php_memory_test.txt'; 
+		
+		// If test file already exists, make sure it doesn't look like a test is already running.
+		if ( file_exists( $test_file ) ) {
+			$last_update_time = filemtime( $test_file );
+			if ( ( time() - $last_update_time ) < backupbuddy_constants::PHP_MEMORY_RETEST_DELAY ) {
+				pb_backupbuddy::status( 'details', 'PHP memory test results: Not enough time has passed since the last test updated the file.' );
+				return false;
+			}
+		} else { // File does not exist.
+			return false;
+		}
+		
+		// Read file contents.
+		if ( false === ( $tested_memory = @file_get_contents( $test_file ) ) ) {
+			pb_backupbuddy::status( 'error', 'Error #66364: Unable to read php memory test results file.' );
+			return false;
+		}
+		
+		// Sanitize.
+		$tested_memory = trim( $tested_memory );
+		
+		// Verify not blank.
+		if ( '' == $tested_memory ) {
+			pb_backupbuddy::status( 'details', 'NOTE: PHP memory test blank. It may be in progress.' );
+			return false;
+		}
+		
+		// Verify numeric.
+		if ( ! is_numeric( $tested_memory ) ) {
+			pb_backupbuddy::status( 'error', 'Error #7684354990: PHP memory test results non-numeric. Trimmed result: `' . $tested_memory . '`.' );
+			return false;
+		}
+		
+		pb_backupbuddy::$options['tested_php_memory'] = ceil( $tested_memory ); // Round up.
+		pb_backupbuddy::$options['last_tested_php_memory'] = time(); // Timestamp test results were last saved.
+		pb_backupbuddy::save();
+		
+		@unlink( $test_file ); // Delete test file as it is no longer needed.
+		
+		return pb_backupbuddy::$options['tested_php_memory'];
+		
+	} // End php_memory_test_results().
+	
+	
+	
+	// Attrib: http://stackoverflow.com/questions/190421/caller-function-in-php-5/
+	public static function getCallingFunctionName($completeTrace=false) {
+        $trace=debug_backtrace();
+        if($completeTrace)
+        {
+            $str = '';
+            foreach($trace as $caller)
+            {
+                $str .= "{$caller['function']}()";
+                if (isset($caller['class']))
+                    $str = "{$caller['class']}{$caller['type']}" . $str;
+            }
+        }
+        else
+        {
+            $caller=$trace[2];
+            $str = "{$caller['function']}()";
+            if (isset($caller['class']))
+                $str = "{$caller['class']}{$caller['type']}" . $str;
+        }
+        return $str;
+    }
+
 	
 	
 } // End class backupbuddy_core.

@@ -115,15 +115,6 @@ if ( '' != pb_backupbuddy::_GET( 'live_action' ) ) {
 		delete_transient( pb_backupbuddy_destination_live::LIVE_ACTION_TRANSIENT_NAME );
 		pb_backupbuddy::alert( 'Deleted cached Live credentials.' );
 		
-	} elseif ( 'trim_archives' == $action ) {
-		
-		require_once( pb_backupbuddy::plugin_path() . '/destinations/live/live.php' );
-		if ( true === backupbuddy_live::trim_remote_archives( $echo = true ) ) {
-			pb_backupbuddy::alert( 'Successfully trimmed remotely stored archived based on limits defined in Settings.' );
-		} else {
-			pb_backupbuddy::alert( 'Error trimming remotely stored archives. See error log for details.' );
-		}
-		
 	} elseif ( 'restart_periodic' == $action ) {
 		
 		
@@ -340,7 +331,7 @@ if ( '' != pb_backupbuddy::_GET( 'live_action' ) ) {
 		
 		$sumLogFile = backupbuddy_core::getLogDirectory() . 'status-live_periodic_' . pb_backupbuddy::$options['log_serial'] . '.txt';
 		echo '<div style="padding: 4px;">';
-			echo '<b>Status Log</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; File size: ' . pb_backupbuddy::$format->file_size( filesize( $sumLogFile ) ) . ' ';
+			echo '<b>Status Log</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; File size: ' . pb_backupbuddy::$format->file_size( @filesize( $sumLogFile ) ) . ' ';
 			?>
 			<a href="<?php echo pb_backupbuddy::nonce_url( $admin_url . '?page=pb_backupbuddy_live&live_action=clear_log' ); ?>" class="button button-secondary button-tertiary" style="margin-left: 11px; vertical-align: 1px;">Clear Status Log</a>
 		</div>
@@ -351,9 +342,20 @@ if ( '' != pb_backupbuddy::_GET( 'live_action' ) ) {
 		</script>
 		<?php
 		echo '<textarea readonly="readonly" style="width: 100%;" wrap="off" cols="65" rows="20" id="backupbuddy_live_log">';
+
+		// Is Live Logging Enabled?
+		$liveID = backupbuddy_live::getLiveID();
+		$logging_disabled = ( isset( pb_backupbuddy::$options['remote_destinations'][ $liveID ]['disable_logging'] ) && ( '1' == pb_backupbuddy::$options['remote_destinations'][ $liveID ][     'disable_logging'] ) );
+
 		if ( ! file_exists( $sumLogFile ) ) {
-			echo __( 'Nothing has been logged.', 'it-l10n-backupbuddy' );
+			if ( $logging_disabled ) {
+				echo __( 'Live Logging has been disabled in Stash Live &#8594; Settings &#8594; Advanced.', 'it-l10n-backupbuddy' );
+			} else {
+				echo __( 'Nothing has been logged.', 'it-l10n-backupbuddy' );
+			}
 		} else {
+			$mtime = @filemtime( $sumLogFile );
+			$time_ago = pb_backupbuddy::$format->time_ago( $mtime );
 			$lines = file_get_contents( $sumLogFile );
 			if ( false === $lines ) {
 				echo 'Error #49834839: Unable to read log file `' . $sumLogFile . '`.';
@@ -379,7 +381,9 @@ if ( '' != pb_backupbuddy::_GET( 'live_action' ) ) {
 			}
 		}
 		?></textarea>
-		<div style="display: inline-block; margin-left: 8px; margin-top: 5px;"><span class="description">Current Time: <?php echo pb_backupbuddy::$format->date( pb_backupbuddy::$format->localize_time( microtime( true ) ), 'G:i:s' ); ?></span></div>
+		<?php if ( ! $logging_disabled ) { ?>
+			<div style="display: inline-block; margin-left: 8px; margin-top: 5px;"><span class="description">Current Time: <?php echo pb_backupbuddy::$format->date( pb_backupbuddy::$format->localize_time( microtime( true ) ), 'G:i:s' ); ?>. &nbsp; &nbsp; &nbsp; Modified: <?php echo $time_ago; ?> ago.</span></div>
+		<?php } ?>
 		<br><br>
 		<?php
 	} elseif ( 'delete_catalog' == $action ) {
@@ -1005,7 +1009,7 @@ if ( 0 != $state['stats']['files_pending_delete'] ) {
 	<br><br>
 	
 	<b>Account:</b><br>
-	<?php echo $destination['itxapi_username']; ?>
+	<?php echo $destination['itxapi_username']; ?> (<a href="<?php echo pb_backupbuddy::nonce_url( $admin_url . '?page=pb_backupbuddy_live&live_action=disconnect' ); ?>">Disconnect</a>)
 	<br><br>
 	
 	<h4>Actions:</h4>
@@ -1020,7 +1024,6 @@ if ( 0 != $state['stats']['files_pending_delete'] ) {
 	<a href="<?php echo pb_backupbuddy::nonce_url( $admin_url . '?page=pb_backupbuddy_live&live_action=reset_last_remote_snapshot' ); ?>" class="button button-secondary button-tertiary">Reset Last Remote Snapshot Time</a>
 	
 	<h4>Misc:</h4>
-	<a href="<?php echo pb_backupbuddy::nonce_url( $admin_url . '?page=pb_backupbuddy_live&live_action=trim_archives' ); ?>" class="button button-secondary button-tertiary">Run Archive Limiting Now</a>
 	<a href="<?php echo pb_backupbuddy::nonce_url( $admin_url . '?page=pb_backupbuddy_live&live_action=last_snapshot_details' ); ?>" class="button button-secondary button-tertiary" style="<?php if ( '' == $state['stats']['last_remote_snapshot_id'] ) { echo 'opacity: 0.4;'; } ?>">Last Snapshot Details</a>
 	<a href="<?php echo pb_backupbuddy::nonce_url( $admin_url . '?page=pb_backupbuddy_live&live_action=delete_catalog' ); ?>" class="button button-secondary button-tertiary" onclick="if ( !confirm('WARNING: This will erase your local catalog of files. All files may need to be re-uploaded. Are you sure you want to do this?') ) { return false; }">Delete Catalog & State</a>
 	

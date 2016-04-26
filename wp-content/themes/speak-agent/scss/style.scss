@@ -197,19 +197,24 @@ cite {
 
 .l-inline {
     display: inline-block;
+    &.hide-mobile {
+        @include media('>phone-landscape'){
+            display: inline-block;
+            visibility: visible;
+        }
+    }
 }
 
 .hide-mobile {
     display: none;
     visibility: hidden;
     @include media('>phone-landscape'){
-        display: initial !important;
-        visibility: initial !important;
+        display: initial;
+        visibility: initial;
     }
 }
 
 .show-mobile {
-    display: initial;
     @include media('>phone-landscape'){
         display: none !important;
         visibility: hidden !important;

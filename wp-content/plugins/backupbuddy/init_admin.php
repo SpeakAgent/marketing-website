@@ -212,7 +212,7 @@ function pb_backupbuddy_contextual_help( $contextual_help, $screen_id, $screen )
 
 /***** BEGIN STASH LIVE ADMIN BAR *****/
 function backupbuddy_live_admin_bar_menu( $wp_admin_bar ) {
-	if ( ! current_user_can( pb_backupbuddy::$options['role_access'] ) ) {
+	if ( ! current_user_can( pb_backupbuddy::$options['role_access'] ) || '1' === pb_backupbuddy::$options['hide_live'] ) {
 		return;
 	}
 	

@@ -83,6 +83,7 @@ $settings_form->add_setting( array(
 	'title'		=>		__( 'Bucket region', 'it-l10n-backupbuddy' ),
 	'options'	=>		array(
 								's3.amazonaws.com'					=>		'us-east-1 &nbsp;|&nbsp; US East (US Standard)',
+								's3-accelerate.amazonaws.com'		=>		'Use S3 Transfer Acceleration (Enable for your bucket in your AWS console)',
 								's3-us-west-2.amazonaws.com'		=>		'us-west-2 &nbsp;|&nbsp; US West (Oregon)',
 								's3-us-west-1.amazonaws.com'		=>		'us-west-1 &nbsp;|&nbsp; US West (Northern California)',
 								's3-eu-central-1.amazonaws.com'		=>		'eu-central-1 &nbsp;|&nbsp; EU (Frankfurt)',
@@ -97,7 +98,7 @@ $settings_form->add_setting( array(
 								's3-website-us-gov-west-1.amazonaws.com'	=>		'US GovCloud (website)',
 								*/
 							),
-	'tip'		=>		__('[Default: US East aka US Standard] - Determines the region where your S3 bucket exists. This must be correct for BackupBuddy to access your bucket.', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__('[Default: US East aka US Standard] - Determines the region where your S3 bucket exists. This must be correct for BackupBuddy to access your bucket. Select the S3 Transfer Acceleration option to potentially significantly increase speeds, especially when sending to a bucket outside your geographical location. You must enable this option per-bucket in your AWS Console. Amazon may charge for use of this feature.', 'it-l10n-backupbuddy' ),
 	'rules'		=>		'required',
 ) );
 

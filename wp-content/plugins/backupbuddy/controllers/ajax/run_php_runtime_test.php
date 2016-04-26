@@ -4,7 +4,7 @@ backupbuddy_core::verifyAjaxAccess();
 pb_backupbuddy::load();
 
 // Schedule to run.
-$cronArgs = array();
+$cronArgs = array( $schedule_results = false, $force_run = true );
 $schedule_result = backupbuddy_core::schedule_single_event( time(), 'php_runtime_test', $cronArgs );
 if ( true === $schedule_result ) {
 	pb_backupbuddy::status( 'details', 'PHP runtime test cron event scheduled.' );

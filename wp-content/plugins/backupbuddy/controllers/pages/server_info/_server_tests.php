@@ -285,13 +285,21 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) ) {
 	} else {
 		$tested_runtime_value = '<span class="description" id="pb_stats_run_php_runtime_test">' . __( 'Pending...', 'it-l10n-backupbuddy' ) . '</span>';
 	}
+	$disabled = '';
+	if ( 0 == pb_backupbuddy::$options['php_runtime_test_minimum_interval'] ) {
+		$disabled = '<span title="' . __( 'Disabled based on Advanced Settings.', 'it-l10n-backupbuddy' ) . '">' . __( 'Disabled', 'it-l10n-backupbuddy' ) . '</span>';
+	}
 	$parent_class_test = array(
 					'title'			=>		'Tested PHP Max Execution Time',
 					'suggestion'	=>		'>= 30 seconds (30+ best)',
-					'value'			=>		$tested_runtime_value . ' <a class="pb_backupbuddy_refresh_stats pb_backupbuddy_testPHPRuntime" rel="run_php_runtime_test" alt="' . pb_backupbuddy::ajax_url( 'run_php_runtime_test' ) . '" title="' . __('Run Test (may take several minutes)', 'it-l10n-backupbuddy' ) . '"><img src="' . pb_backupbuddy::plugin_url() . '/images/refresh_gray.gif" style="vertical-align: -1px;"> <span class="pb_backupbuddy_loading" style="display: none; margin-left: 10px;"><img src="' . pb_backupbuddy::plugin_url() . '/images/loading.gif" alt="' . __('Loading...', 'it-l10n-backupbuddy' ) . '" title="' . __('Loading...', 'it-l10n-backupbuddy' ) . '" width="16" height="16" style="vertical-align: -3px;" /></span></a>',
-					'tip'			=>		__('This is the TESTED amount of time that PHP allows scripts to run. The test was performed by outputting / logging the script time elapsed once per second until PHP timed out and thus the time reported stopped. This gives a fairly accurate number compared to the reported number which is most often overriden at the server with a limit.', 'it-l10n-backupbuddy' ) . ' ' . 'This test is limited to `' . backupbuddy_constants::PHP_RUNTIME_TEST_MAX_TIME . '` seconds. Automatically rescans during housekeeping after `' . backupbuddy_constants::PHP_RUNTIME_TEST_MINIMUM_INTERVAL . '` seconds elapse between tests as well always on plugin activation.',
+					'value'			=>		$tested_runtime_value . $disabled . ' <a class="pb_backupbuddy_refresh_stats pb_backupbuddy_testPHPRuntime" rel="run_php_runtime_test" alt="' . pb_backupbuddy::ajax_url( 'run_php_runtime_test' ) . '" title="' . __('Run Test (may take several minutes)', 'it-l10n-backupbuddy' ) . '"><img src="' . pb_backupbuddy::plugin_url() . '/images/refresh_gray.gif" style="vertical-align: -1px;"> <span class="pb_backupbuddy_loading" style="display: none; margin-left: 10px;"><img src="' . pb_backupbuddy::plugin_url() . '/images/loading.gif" alt="' . __('Loading...', 'it-l10n-backupbuddy' ) . '" title="' . __('Loading...', 'it-l10n-backupbuddy' ) . '" width="16" height="16" style="vertical-align: -3px;" /></span></a>',
+					'tip'			=>		__('This is the TESTED amount of time that PHP allows scripts to run. The test was performed by outputting / logging the script time elapsed once per second until PHP timed out and thus the time reported stopped. This gives a fairly accurate number compared to the reported number which is most often overriden at the server with a limit.', 'it-l10n-backupbuddy' ) . ' ' . 'This test is limited to `' . pb_backupbuddy::$options['php_runtime_test_minimum_interval'] . '` seconds based on your advanced settings (0 = disabled). Automatically rescans during housekeeping after `' . pb_backupbuddy::$options['php_runtime_test_minimum_interval'] . '` seconds elapse between tests as well always on plugin activation.',
 				);
-	$parent_class_test['status'] = 'OK';
+	if ( is_numeric( pb_backupbuddy::$options['tested_php_runtime'] ) && ( pb_backupbuddy::$options['tested_php_runtime'] < 29 ) ) {
+		$parent_class_test['status'] = 'FAIL';
+	} else {
+		$parent_class_test['status'] = 'OK';
+	}
 	array_push( $tests, $parent_class_test );
 }
 
@@ -310,7 +318,11 @@ if ( ! defined( 'PB_IMPORTBUDDY' ) ) {
 					'value'			=>		$bb_php_max_execution,
 					'tip'			=>		__('This is the max execution time BackupBuddy is using for chunking. It is the lesser of the values of the reported PHP execution time and actual tested execution time. If the BackupBuddy "Max time per chunk" Advanced Setting is set then that value is used instead.', 'it-l10n-backupbuddy' ),
 				);
-	$parent_class_test['status'] = 'OK';
+	if ( $bb_php_max_execution < 30 ) {
+		$parent_class_test['status'] = 'FAIL';
+	} else {
+		$parent_class_test['status'] = 'OK';
+	}
 	array_push( $tests, $parent_class_test );
 }
 
@@ -334,7 +346,7 @@ if ( ! isset( $phpinfo_array['memory_limit'] ) ) {
 }
 $parent_class_test = array(
 				'title'			=>		'Reported PHP Memory Limit',
-				'suggestion'	=>		'>= 256M',
+				'suggestion'	=>		'>= 256 MB',
 				'value'			=>		$parent_class_val,
 				'tip'			=>		__('The amount of memory this site is allowed to consume. Note that some host\'s master value may override the local setting, capping it at a lower value.', 'it-l10n-backupbuddy' ),
 			);
@@ -344,7 +356,11 @@ foreach( $mem_limits as $mem_limit ) {
 		$unit = $matches[2];
 		// Up memory limit if currently lower than 256M.
 		if ( 'g' !== strtolower( $unit ) ) {
-			if ( ( $parent_class_val < 256 ) || ( 'm' !== strtolower( $unit ) ) ) {
+			if ( 'm' !== strtolower( $unit ) ) {
+				$parent_class_test['status'] = 'WARNING';
+			} elseif ( $parent_class_val < 125 ) {
+				$parent_class_test['status'] = 'FAIL';
+			} elseif ( $parent_class_val < 250 ) {
 				$parent_class_test['status'] = 'WARNING';
 			} else {
 				$parent_class_test['status'] = 'OK';
@@ -360,6 +376,42 @@ foreach( $mem_limits as $mem_limit ) {
 	}
 }
 array_push( $tests, $parent_class_test );
+
+
+
+// Tested PHP Memory Limit (ACTUAL TESTED!)
+if ( ! defined( 'PB_IMPORTBUDDY' ) ) {
+	if ( pb_backupbuddy::$options['tested_php_memory'] > 0 ) {
+		$last_tested = pb_backupbuddy::$format->date( pb_backupbuddy::$format->localize_time( pb_backupbuddy::$options['last_tested_php_memory'] ) ) . ' (' . pb_backupbuddy::$format->time_ago( pb_backupbuddy::$options['last_tested_php_memory'] ) . ' ' . __( 'ago', 'it-l10n-backupbuddy' ) . ')';
+		$tested_memory_value = '<span id="pb_stats_run_php_memory_test" title="Last tested: `' . $last_tested . '`">' . pb_backupbuddy::$options['tested_php_memory'] . ' ' . __( 'MB', 'it-l10n-backupbuddy' ) . '</span>';
+	} else {
+		$tested_memory_value = '<span class="description" id="pb_stats_run_php_memory_test">' . __( 'Pending...', 'it-l10n-backupbuddy' ) . '</span>';
+	}
+	$disabled = '';
+	if ( 0 == pb_backupbuddy::$options['php_memory_test_minimum_interval'] ) {
+		$disabled = '<span title="' . __( 'Disabled based on Advanced Settings.', 'it-l10n-backupbuddy' ) . '">' . __( 'Disabled', 'it-l10n-backupbuddy' ) . '</span>';
+	}
+	$parent_class_test = array(
+					'title'			=>		'Tested PHP Memory Limit',
+					'suggestion'	=>		'>= 256 MB',
+					'value'			=>		$tested_memory_value . $disabled . ' <a class="pb_backupbuddy_refresh_stats pb_backupbuddy_testPHPMemory" rel="run_php_memory_test" alt="' . pb_backupbuddy::ajax_url( 'run_php_memory_test' ) . '" title="' . __('Run Test (may take several minutes)', 'it-l10n-backupbuddy' ) . '"><img src="' . pb_backupbuddy::plugin_url() . '/images/refresh_gray.gif" style="vertical-align: -1px;"> <span class="pb_backupbuddy_loading" style="display: none; margin-left: 10px;"><img src="' . pb_backupbuddy::plugin_url() . '/images/loading.gif" alt="' . __('Loading...', 'it-l10n-backupbuddy' ) . '" title="' . __('Loading...', 'it-l10n-backupbuddy' ) . '" width="16" height="16" style="vertical-align: -3px;" /></span></a>',
+					'tip'			=>		__('This is the TESTED amount of memory allowed to PHP scripts. The test was performed by outputting / logging the script memory usage while memory usage was increased. This gives a fairly accurate number compared to the reported number which is commonly overriden at the server with a limit, making it difficult to ascertain.', 'it-l10n-backupbuddy' ) . ' ' . 'This test is limited to running no more often than every `' . pb_backupbuddy::$options['php_memory_test_minimum_interval'] . '` seconds based on your advanced settings (0 = disabled). Runs during housekeeping as well always on plugin activation.',
+				);
+	if ( is_numeric( pb_backupbuddy::$options['tested_php_memory'] ) ) {
+		if ( 0 == pb_backupbuddy::$options['tested_php_memory'] ) {
+			$parent_class_test['status'] = 'OK';
+	 	} elseif ( pb_backupbuddy::$options['tested_php_memory'] < 123 ) {
+			$parent_class_test['status'] = 'FAIL';
+		} elseif ( pb_backupbuddy::$options['tested_php_memory'] < 245 ) { // 245 instead of 256 to give the test some wiggle room.
+			$parent_class_test['status'] = 'WARNING';
+		} else {
+			$parent_class_test['status'] = 'OK';
+		}
+	} else {
+		$parent_class_test['status'] = 'WARNING';
+	}
+	array_push( $tests, $parent_class_test );
+}
 
 
 
@@ -870,13 +922,18 @@ array_push( $tests, $parent_class_test );
 
 
 // PHP Bits
+$bits = ( PHP_INT_SIZE * 8 );
 $parent_class_test = array(
 				'title'			=>		'PHP Architecture',
 				'suggestion'	=>		'64-bit',
-				'value'			=>		( PHP_INT_SIZE * 8 ) . '-bit',
+				'value'			=>		$bits . '-bit',
 				'tip'			=>		__('Whether PHP is running in 32 or 64 bit mode. 64-bit is recommended over 32-bit. Note: This only determines PHP status NOT status of other server functionality such as filesystem, command line zip, etc.', 'it-l10n-backupbuddy' ),
 			);
-$parent_class_test['status'] = 'OK';
+if ( $bits < 60 ) {
+	$parent_class_test['status'] = 'WARNING';
+} else {
+	$parent_class_test['status'] = 'OK';
+}
 array_push( $tests, $parent_class_test );
 
 
