@@ -25,6 +25,7 @@ $stats = array(
 	'continuous_status' => '-1',
 	'continuous_status_pretty' => __( 'Unknown', 'it-l10n-backupbuddy' ),
 	'overall_percent' => '-1',
+	'files_to_catalog_percentage'  => '0',
 	
 	'periodic_status' => '-1',
 	'periodic_status_pretty' => __( 'Unknown', 'it-l10n-backupbuddy' ),
@@ -100,10 +101,10 @@ if ( '1' == $destination['pause_periodic'] ) {
 
 // Last function status.
 if ( '' != $state['step']['last_status'] ) {
-	$stats['last_function_status_pretty'] = $state['step']['last_status'];
+	$stats['last_function_status_pretty'] = str_replace( "'", '', $state['step']['last_status'] );
 }
 if ( ( '' != $state['step']['last_status'] ) && ( FALSE !== stristr( $state['step']['last_status'], 'Error' ) ) ) {
-	$stats['error_alert'] = $state['step']['last_status'];
+	$stats['error_alert'] = str_replace( "'", '', $state['step']['last_status'] );
 }
 
 // Database size.
@@ -148,6 +149,9 @@ if ( $state['stats']['tables_total_count'] > 0 ) {
 // Files total size.
 if ( 0 == $state['stats']['files_total_size'] ) {
 	$stats['files_size_pretty'] = 'Calculating size...';
+	if ( ! empty( $state['stats']['files_to_catalog_percentage'] ) ) {
+		$stats['files_size_pretty'] .= ' ' . $state['stats']['files_to_catalog_percentage'] . '%';
+	}
 } else {
 	$stats['files_size_bytes'] = $state['stats']['files_total_size'];
 	$stats['files_size_pretty'] = pb_backupbuddy::$format->file_size( $state['stats']['files_total_size'] );

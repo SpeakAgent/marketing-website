@@ -37,11 +37,13 @@ class backupbuddy_live_troubleshooting {
 		'start_troubleshooting' => 0,
 		'finish_troubleshooting' => 0,
 		'gmt_offset' => 0,
-		'live_status_log_modified' => '',						// Timestamp status log was last modified.
-		'live_status_log_modified_ago' => '',					// Time since status log was last modified.
+		'current_time' => 0,
+		'localized_time' => 0,
+		'current_timestamp' => 0,
 		
 		'highlights' => array(),
 		'php_notices' => array(),								// Any PHP errors, warnings, notices found in any of the log searched.
+		'log_file_info' => array(),								// File sizes, mtime, etc of various logs.
 		'bb_notices' => array(),								// Any BackupBuddy errors or warnings logged.
 		'recent_waiting_on_files' => array(),					// Recent list of files waiting on as per $files_pending_send_file file contents.
 		'recent_waiting_on_files_time' => 0,					// File modified time.
@@ -56,8 +58,6 @@ class backupbuddy_live_troubleshooting {
 		'server_stats' => array(),
 		'crons' => array(),										// Listing of crons for troubleshooting.
 		'extraneous_log_tail' => '',							// Tail end of extraneous log file.
-		'extraneous_log_modified' => 0,
-		'extraneous_log_modified_ago' => '',
 	);
 	
 	
@@ -65,6 +65,9 @@ class backupbuddy_live_troubleshooting {
 	public static function run() {
 		self::$_results['start_troubleshooting'] = microtime( true );
 		self::$_results['gmt_offset'] = get_option( 'gmt_offset' );
+		self::$_results['current_time'] = pb_backupbuddy::$format->date( time() );
+		self::$_results['localized_time'] = pb_backupbuddy::$format->date( pb_backupbuddy::$format->localize_time( time() ) );
+		self::$_results['current_timestamp'] = time();
 		
 		// Recent send fails (remote destination failures).
 		// HIGHLIGHTS: PHP errors, send errors, NUMBER of sends failed in X hours
@@ -72,6 +75,7 @@ class backupbuddy_live_troubleshooting {
 		// Populates tail of status log and looks for PHP and BB notices.
 		self::_test_site_home_url();
 		self::_test_versions();
+		self::_test_log_file_info();
 		self::_test_status_log();
 		self::_test_recent_sync_notifications();
 		self::_test_live_state();
@@ -88,16 +92,47 @@ class backupbuddy_live_troubleshooting {
 	} // End run().
 	
 	
+	
 	public static function _test_site_home_url() {
 		self::$_results['site_url'] = site_url();
 		self::$_results['home_url'] = home_url();
 	}
+	
+	
 	
 	public static function _test_versions() {
 		global $wp_version;
 		self::$_results['bb_version'] = pb_backupbuddy::settings( 'version' );
 		self::$_results['wp_version'] = $wp_version;
 	}
+	
+	
+	
+	public static function _test_log_file_info() {
+		$log_files = array(
+			'files_pending_log' => backupbuddy_core::getLogDirectory() . 'live/files_pending_send-' . pb_backupbuddy::$options['log_serial'] . '.txt',
+			'tables_pending_log' => backupbuddy_core::getLogDirectory() . 'live/tables_pending_send-' . pb_backupbuddy::$options['log_serial'] . '.txt',
+			'extraneous_log' => backupbuddy_core::getLogDirectory() . 'log-' . pb_backupbuddy::$options['log_serial'] . '.txt',
+			'live_log' => backupbuddy_core::getLogDirectory() . 'status-live_periodic_' . pb_backupbuddy::$options['log_serial'] . '.txt',
+		);
+		
+		foreach( $log_files as $title => $log_file ) {
+			if ( ! file_exists( $log_file ) ) {
+				self::$_results['log_file_info'][ $title ] = '[does not exist]';
+				continue;
+			}
+			
+			$mtime = @filemtime( $log_file );
+			
+			self::$_results['log_file_info'][ $title ] = array(
+				'size' => pb_backupbuddy::$format->file_size( @filesize( $log_file ) ),
+				'modified' => $mtime,
+				'modified_pretty' => pb_backupbuddy::$format->date( $mtime ),
+				'modified_ago' => pb_backupbuddy::$format->time_ago( $mtime ),
+			);
+		}
+	} // End _test_log_file_sizes().
+	
 	
 	
 	public static function get_raw_results() {
@@ -150,11 +185,11 @@ class backupbuddy_live_troubleshooting {
 		self::_find_notices( $status_log_file_contents, $status_log_file );
 		
 		// Get tail of status log.
-		self::$_results['extraneous_log_tail'] = backupbuddy_core::read_backward_line( $status_log_file, self::$_settings['extraneous_log_recent_lines'] );
-		
-		// Get modified times.
-		self::$_results['extraneous_log_modified'] = filemtime( $status_log_file );
-		self::$_results['extraneous_log_modified_ago'] = pb_backupbuddy::$format->time_ago( self::$_results['extraneous_log_modified'] ) . ' ' . __( 'ago', 'it-l10n-backupbuddy' );
+		if ( file_exists( $status_log_file ) ) {
+			self::$_results['extraneous_log_tail'] = backupbuddy_core::read_backward_line( $status_log_file, self::$_settings['extraneous_log_recent_lines'] );
+		} else {
+			self::$_results['extraneous_log_tail'] = '**Log file `' . $status_log_file . '` not found.**';
+		}
 	}
 	
 	private static function _test_status_log() {
@@ -163,11 +198,11 @@ class backupbuddy_live_troubleshooting {
 		self::_find_notices( $status_log_file_contents, $status_log_file );
 		
 		// Get tail of status log.
-		self::$_results['live_status_log_tail'] = backupbuddy_core::read_backward_line( $status_log_file, self::$_settings['status_log_recent_lines'] );
-		
-		// Get modified times.
-		self::$_results['live_status_log_modified'] = filemtime( $status_log_file );
-		self::$_results['live_status_log_modified_ago'] = pb_backupbuddy::$format->time_ago( self::$_results['live_status_log_modified'] ) . ' ' . __( 'ago', 'it-l10n-backupbuddy' );
+		if ( file_exists( $status_log_file ) ) {
+			self::$_results['live_status_log_tail'] = backupbuddy_core::read_backward_line( $status_log_file, self::$_settings['status_log_recent_lines'] );
+		} else {
+			self::$_results['extraneous_log_tail'] = '**Log file `' . $status_log_file . '` not found.**';
+		}
 	}
 	
 	
@@ -214,8 +249,12 @@ class backupbuddy_live_troubleshooting {
 	
 	
 	private static function _test_cron_scheduled() {
+		$cron_warnings = array();
 		require( pb_backupbuddy::plugin_path() . '/controllers/pages/server_info/_cron.php' );
 		self::$_results['crons'] = self::_strip_tags_content( $crons );
+		if ( count( $cron_warnings ) > 0 ) {
+			self::$_results['highlights'][] = count( $cron_warnings ) . ' cron(s) warnings were found (such as past due; see cron section for details): ' . implode( '; ', array_unique( $cron_warnings ) );
+		}
 	}
 	
 	
@@ -248,6 +287,8 @@ class backupbuddy_live_troubleshooting {
 			
 			if ( file_exists( $send['log_file'] ) ) {
 				$send['log_tail'] = backupbuddy_core::read_backward_line( $send['log_file'], self::$_settings['send_fail_status_log_recent_lines'] );
+			} else {
+				self::$_results['extraneous_log_tail'] = '**Log file `' . $send['log_file'] . '` not found.**';
 			}
 		}
 		
@@ -272,12 +313,18 @@ class backupbuddy_live_troubleshooting {
 		$newProcessStarting = false;
 		$prevLine = '';
 		$lastMem = 0;
+		$recordNextLines = 0;
 		
 		$separator = "\r\n";
 		$line = strtok( $log, $separator ); // Attribution: http://stackoverflow.com/questions/1462720/iterate-over-each-line-in-a-string-in-php
 		while ($line !== false) {
 			# do something with $line
 			$line = strtok( $separator );
+			
+			if ( $recordNextLines > 0 ) {
+				$php_notices[] = $line;
+				$recordNextLines--;
+			}
 			
 			if ( true === $newProcessStarting ) {
 				if ( false !== stripos( $line, 'possible_timeout' ) ) {
@@ -306,6 +353,7 @@ class backupbuddy_live_troubleshooting {
 			
 			} elseif ( false !== stripos( $line, 'Fatal PHP error encountered:' ) ) { // BB-prefix.
 				$php_notices[] = $line;
+				$recordNextLines = 5; // Record the next 5 lines after this so we get the actual error.
 			
 			// fatal PHP error
 			} elseif ( false !== stripos( $line, 'Fatal error:' ) ) {

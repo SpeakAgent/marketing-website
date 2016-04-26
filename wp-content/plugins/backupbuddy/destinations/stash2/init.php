@@ -157,20 +157,25 @@ class pb_backupbuddy_destination_stash2 { // Change class name end to match dest
 			'wp'        => $wp_version,
 			'bb'		=> pb_backupbuddy::settings( 'version' ),
 			'site'      => str_replace( 'www.', '', site_url() ),
+			'home'      => str_replace( 'www.', '', home_url() ),
 			'timestamp' => time()
 		);
 		
+		$params = array();
 		if ( isset( $settings['itxapi_password' ] ) ) { // Used on initital connection to  
-			$params = array( 'auth_token' => $settings['itxapi_password'] ); // itxapi_password is a HASH of user's password.
-		} elseif ( isset( $settings['itxapi_token' ] ) ) { // Used on initital connection to  
-			$params = array( 'token' => $settings['itxapi_token'] ); // itxapi_password is a HASH of user's password.
-		} else {
+			$params['auth_token'] = $settings['itxapi_password']; // itxapi_password is a HASH of user's password.
+		}
+		if ( isset( $settings['itxapi_token' ] ) ) { // Used on initital connection to  
+			$params['token'] = $settings['itxapi_token']; // itxapi_password is a HASH of user's password.
+		}
+		/*
 			$error = 'BackupBuddy Error #438923983: No valid token (itxapi_token) or hashed password (itxapi_password) specified. This should not happen.';
 			self::_error( $error );
 			trigger_error( $error, E_USER_NOTICE );
 			return $error;
 		}
-		
+		*/
+		//print_r( $params );
 		$params = array_merge( $params, $additionalParams );
 		
 		$post_url = self::API_URL . '/?' . http_build_query( $url_params, null, '&' );
@@ -218,7 +223,7 @@ class pb_backupbuddy_destination_stash2 { // Change class name end to match dest
 					return $response_decoded;
 				}
 			} else {
-				$error = 'Error #8393833: Unexpected server response: `' . htmlentities( $response['body'] ) . '` calling action `' . $action . '`.';
+				$error = 'Error #8393833: Unexpected server response: `' . htmlentities( $response['body'] ) . '` calling action `' . $action . '`. Full response: `' . print_r( $response, true ) . '`.';
 				self::_error( $error );
 				return $error;
 			}

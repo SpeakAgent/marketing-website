@@ -48,6 +48,7 @@ class pb_backupbuddy_destination_live {
 		'no_new_snapshots_error_days' =>	'10',		// Sends error emails if no Snapshots 
 		'max_wait_on_transfers_time' =>		'5',		// Maximum minutes to wait for pending transfers to complete before falling back to Snapshotting.
 		'email'						=>		'',			// Email to send snapshot notifications to. If blank it will use iThemes Member Account email.
+		'max_delete_burst'			=>		'100',		// Max number of files per delete per burst. Eg number of files to pass into deleteFiles() function.
 		
 		/***** BEGIN ARCHIVE LIMITS *****/
 		'limit_db_daily'			=>		'5',

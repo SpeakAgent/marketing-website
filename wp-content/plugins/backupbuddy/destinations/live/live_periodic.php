@@ -160,14 +160,19 @@ class backupbuddy_live_periodic {
 	 */
 	public static function run_periodic_process( $preferredStep = '', $preferredStepArgs = array() ) {
 		
+		require_once( pb_backupbuddy::plugin_path() . '/destinations/live/live.php' );
 		$previous_status_serial = pb_backupbuddy::get_status_serial(); // Hold current serial.
 		pb_backupbuddy::set_status_serial( 'live_periodic' ); // Redirect logging output to a certain log file.
-		pb_backupbuddy::status( 'details', '-----' );
 		global $wp_version;
-		pb_backupbuddy::status( 'details', 'Live periodic process starting with BackupBuddy v' . pb_backupbuddy::settings( 'version' ) . ' with WordPress v' . $wp_version . '.' );
+		$liveID = backupbuddy_live::getLiveID();
+		$logging_disabled = ( isset( pb_backupbuddy::$options['remote_destinations'][ $liveID ]['disable_logging'] ) && ( '1' == pb_backupbuddy::$options['remote_destinations'][ $liveID ]['disable_logging'] ) );
+
+		if ( ! $logging_disabled ) {
+			pb_backupbuddy::status( 'details', '-----' );
+			pb_backupbuddy::status( 'details', 'Live periodic process starting with BackupBuddy v' . pb_backupbuddy::settings( 'version' ) . ' with WordPress v' . $wp_version . '.' );
+		}
 		
 		// Make sure we are not PAUSED.
-		$liveID = backupbuddy_live::getLiveID();
 		if ( '1' == pb_backupbuddy::$options['remote_destinations'][ $liveID ]['pause_periodic'] ) {
 			pb_backupbuddy::status( 'details', 'Aborting periodic process as it is currently PAUSED based on settings.' );
 			// Undo log redirect.
@@ -176,13 +181,11 @@ class backupbuddy_live_periodic {
 		}
 		
 		// Logging disabled.
-		if ( isset( pb_backupbuddy::$options['remote_destinations'][ $liveID ]['disable_logging'] ) && ( '1' == pb_backupbuddy::$options['remote_destinations'][ $liveID ]['disable_logging'] ) ) {
-			pb_backupbuddy::status( 'details', 'Logs disabled based on settings. Ending log.' );
+		if ( $logging_disabled ) {
 			pb_backupbuddy::set_status_serial( $previous_status_serial );
 		}
 		
 		require_once( pb_backupbuddy::plugin_path() . '/classes/core.php' );
-		require_once( pb_backupbuddy::plugin_path() . '/destinations/live/live.php' );
 		require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
 		
 		// Register a shutdown function to catch PHP errors and log them.
@@ -662,8 +665,8 @@ class backupbuddy_live_periodic {
 			if ( true !== $lastSendThisPass ) {
 				// Run cleanup on send files.
 				require_once( pb_backupbuddy::plugin_path() . '/classes/housekeeping.php' );
-				backupbuddy_housekeeping::trim_remote_send_stats( $file_prefix = 'send-live_', $limit = $destination_settings['max_send_details_limit'] ); // Only keep last X send fileoptions.
-				backupbuddy_housekeeping::purge_logs( $file_prefix = 'status-remote_send-live_', $limit = $destination_settings['max_send_details_limit'] ); // Only keep last X send logs.
+				backupbuddy_housekeeping::trim_remote_send_stats( $file_prefix = 'send-live_', $limit = $destination_settings['max_send_details_limit'], '', $purge_log = true ); // Only keep last X send fileoptions.
+				// Moved to trim_remote_send_stats(). backupbuddy_housekeeping::purge_logs( $file_prefix = 'status-remote_send-live_', $limit = $destination_settings['max_send_details_limit'] ); // Only keep last X send logs.
 				
 				// Increment try count for transfer attempts and save.
 				$tableDetails['t']++;
@@ -1084,7 +1087,12 @@ class backupbuddy_live_periodic {
 		$destination_settings = self::get_destination_settings();
 		pb_backupbuddy::status( 'details', 'Starting deep file scan.' );
 		$max_time = $destination_settings['max_time'] - self::TIME_WIGGLE_ROOM;
-		$files = (array) pb_backupbuddy::$filesystem->deepscandir( $root, $excludes, $startAt, $items, $start_time, ( $max_time - 8 ) ); // Additional 5 seconds so that we can add files into catalog after this completes.
+		$files = pb_backupbuddy::$filesystem->deepscandir( $root, $excludes, $startAt, $items, $start_time, ( $max_time - 8 ) ); // Additional 5 seconds so that we can add files into catalog after this completes.
+		if ( ! is_array( $files ) ) {
+			backupbuddy_core::addNotification( 'live_error', 'BackupBuddy Stash Live Error', $files );
+			pb_backupbuddy::status( 'error', 'Error #84393434: Halting Stash Live due to error returned by deepscandir: `' . $files . '`.' );
+			return $files;
+		}
 		if ( false === $files[0] ) { // Format when chunking: array( $finished = false, array( $startAt, $items ) )
 			pb_backupbuddy::status( 'details', 'Deep file scan requires chunking.' );
 			return array( 'File scanning', array( $custom_root, $files[1][0], $files[1][1] ) );
@@ -1135,7 +1143,13 @@ class backupbuddy_live_periodic {
 					}
 				}
 				*/
-				pb_backupbuddy::status( 'details', 'Add to catalog: `' . $pathed_file . '`.' );
+				if ( $filesAdded % 2000 == 0 ) {
+					self::$_state['stats']['files_to_catalog_percentage'] = round( number_format( ($filesAdded / count($files) ) * 100, 2) );
+					self::$_stateObj->save();
+				}
+				if ( '3' == pb_backupbuddy::$options['log_level'] ) { // Full logging enabled.
+					pb_backupbuddy::status( 'details', 'Add to catalog: `' . $pathed_file . '`.' );
+				}
 			} else { // Already exists in catalog.
 				if ( 0 == self::$_catalog[ $pathed_file ]['b'] ) { // File not backed up to server yet (pending send).
 					if ( true !== self::$_catalog[ $pathed_file ]['d'] ) { // Not pending deletion already.
@@ -1155,6 +1169,7 @@ class backupbuddy_live_periodic {
 		
 		// Checking existing catalog files with new scan to see if anything needs deletion.
 		$filesDeleted = 0;
+		//$sinceLogTrim = 0;
 		foreach( self::$_catalog as $signatureFile => &$signatureDetails ) {
 			if ( true === $signatureDetails['d'] ) { // Already marked for deletion.
 				continue;
@@ -1165,6 +1180,7 @@ class backupbuddy_live_periodic {
 				}
 			}
 			if ( ! isset( $files[ $signatureFile ] ) ) { // File no longer exists in new scan. Mark for deletion.
+				//$sinceLogTrim++;
 				$filesDeleted++;
 				$signatureDetails['d'] = true;
 				self::$_state['stats']['files_pending_delete']++;
@@ -1180,6 +1196,13 @@ class backupbuddy_live_periodic {
 					self::$_state['stats']['files_total_count'] = 0;
 				}
 				pb_backupbuddy::status( 'details', 'Remove file that no longer exists locally. Flagging `' . $signatureFile . '` for deletion.' );
+				/*
+				if ( $sinceLogTrim > 1000 ) {
+					$sinceLogTrim = 0;
+					self::$_catalogObj->save(); // In case it dies.
+					self::_truncate_log();
+				}
+				*/
 			}
 		}
 		
@@ -1297,18 +1320,21 @@ class backupbuddy_live_periodic {
 			$signatureDetails['m'] = $stat['mtime']; // Update modified time.
 			$signatureDetails['s'] = $stat['size']; // Update size.
 			
-			// If not already set to backup then check auditing info to see if the file was missing from the remote server as of the start of the last audit that finished.
-			if ( ( 0 != $signatureDetails['b'] ) && ( self::$_state['stats']['last_file_audit_finish'] > self::$_state['stats']['last_file_audit_start'] ) ) { // Not pending send already AND last audit that began has indeed finished.
-				// Was the file marked as sent BEFORE auditing began?
-				if ( $signatureDetails['b'] < self::$_state['stats']['last_file_audit_start'] ) { // File was marked sent before the audit began so it should exist remotely.
-					// Was the file NOT verified since the beginning of the last audit?
-					if ( $signatureDetails['v'] < self::$_state['stats']['last_file_audit_start'] ) { // Not verified since the last audit (which we already confirmed has finished).
-						// File needs re-sent since missing on remote server. Made it here then the following must apply: file is not already set to backup, the last audit that started has indeed finished, the file was already marked as sent prior to the last audit start, the file is not marked for deletion (would not have made it to this block of code) and the verification key timestamp is before the last audit began (or zero which is the same) so it should have existed during the audit.
-						$signatureDetails['v'] = 0; // Reset audit timestamp.
-						$signatureDetails['b'] = 0; // Reset backup timestamp since we know it's not backed up.
-						$signatureDetails['t'] = 0; // Reset try (send attempt) counter.
-						self::$_state['stats']['files_pending_send']++; // Update files pending send counter.
-						$filesNeedingResendFromIffyAudit++;
+			if ( 0 != self::$_state['stats']['last_file_audit_start'] ) { // Only run if audit has ran yet.
+				// If not already set to backup then check auditing info to see if the file was missing from the remote server as of the start of the last audit that finished.
+				if ( ( 0 != $signatureDetails['b'] ) && ( self::$_state['stats']['last_file_audit_finish'] > self::$_state['stats']['last_file_audit_start'] ) ) { // Not pending send already AND last audit that began has indeed finished.
+					// Was the file marked as sent BEFORE auditing began?
+					if ( $signatureDetails['b'] < self::$_state['stats']['last_file_audit_start'] ) { // File was marked sent before the audit began so it should exist remotely.
+						// Was the file NOT verified since the beginning of the last audit?
+						if ( $signatureDetails['v'] < self::$_state['stats']['last_file_audit_start'] ) { // Not verified since the last audit (which we already confirmed has finished).
+							// File needs re-sent since missing on remote server. Made it here then the following must apply: file is not already set to backup, the last audit that started has indeed finished, the file was already marked as sent prior to the last audit start, the file is not marked for deletion (would not have made it to this block of code) and the verification key timestamp is before the last audit began (or zero which is the same) so it should have existed during the audit.
+							$signatureDetails['v'] = 0; // Reset audit timestamp.
+							$signatureDetails['b'] = 0; // Reset backup timestamp since we know it's not backed up.
+							$signatureDetails['t'] = 0; // Reset try (send attempt) counter.
+							self::$_state['stats']['files_pending_send']++; // Update files pending send counter.
+							
+							$filesNeedingResendFromIffyAudit++;
+						}
 					}
 				}
 			}
@@ -1353,12 +1379,17 @@ class backupbuddy_live_periodic {
 		if ( false === self::_load_catalog() ) {
 			return false;
 		}
+		
+		// Build Stash2 destination settings based on Live settings.
+		$destination_settings = self::get_destination_settings();
+		
 		pb_backupbuddy::status( 'details', 'Starting deletions at point: `' . $startAt . '`.' );
 		
 		// Loop through files in the catalog.
 		$loopCount = 0;
 		$checkCount = 0;
 		$filesDeleted = 0;
+		$deleteQueue = array(); // Files queued to delete.
 		$last_save = microtime( true );
 		foreach( self::$_catalog as $signatureFile => &$signatureDetails ) {
 			if ( 0 != $startAt ) { // Resuming...
@@ -1404,28 +1435,22 @@ class backupbuddy_live_periodic {
 				unset( $fileoptions_obj );
 			}
 			
-			// If file has been backed up to server then we need to delete the remote file.
+			// If file has been backed up to server then we need to QUEUE the file for deletion.
 			if ( 0 != $signatureDetails['b'] ) {
-				// Build Stash2 destination settings based on Live settings.
-				$destination_settings = self::get_destination_settings();
-				$deleteFile = $signatureFile;
-				if ( true !== ( $delete_result = pb_backupbuddy_destination_live::deleteFile( $destination_settings, $deleteFile ) ) ) {
-					pb_backupbuddy::status( 'error', 'Error #8239833: Unable to delete remote file `' . $deleteFile . '`' );
-				} elseif ( true === $delete_result ) {
-					pb_backupbuddy::status( 'details', 'Deleted remote file `' . $deleteFile . '`.' );
-				}
+				$deleteQueue[] = $signatureFile;
 			}
 			
-			// Remove file from catalog and update state stats.
-			unset( self::$_catalog[ $signatureFile ] );
-			self::$_state['stats']['files_pending_delete']--;
-			if ( self::$_state['stats']['files_pending_delete'] < 0 ) {
-				self::$_state['stats']['files_pending_delete'] = 0;
+			// Is the queue full to the delete burst limit? Process queue.
+			if ( count( $deleteQueue ) >= $destination_settings['max_delete_burst'] ) {
+				pb_backupbuddy::status( 'details', 'File deletion queue full to burst limit. Triggering deletions call.' );
+				self::_process_internal_delete_queue( $destination_settings, $deleteQueue, $filesDeleted ); // Process any items in the deletion queue. $deleteQueue and $filesDeleted are references.
 			}
-			$filesDeleted++;
 			
 			// See if it's time to save our progress so far.
 			if ( ( time() - $last_save ) > self::SAVE_SIGNATURES_EVERY_X_SECONDS ) {
+				pb_backupbuddy::status( 'details', 'Time to save progress so far. Triggering deletions call then saving.' );
+				self::_process_internal_delete_queue( $destination_settings, $deleteQueue, $filesDeleted ); // Process any items in the deletion queue. $deleteQueue and $filesDeleted are references.
+				
 				self::$_stateObj->save();
 				self::$_catalogObj->save();
 				$last_save = microtime( true );
@@ -1433,12 +1458,20 @@ class backupbuddy_live_periodic {
 			
 			// Do we have enough time to continue or do we need to chunk?
 			if ( ( microtime( true ) - $start_time + self::TIME_WIGGLE_ROOM )  > $destination_settings['max_time'] ) { // Running out of time! Chunk.
+				pb_backupbuddy::status( 'details', 'Running out of time processing deletions. Took `' . ( microtime( true ) - $start_time ) . '` seconds. Triggering deletions call then saving.' );
+				//self::_process_internal_delete_queue( $destination_settings, $deleteQueue, $filesDeleted ); // Process any items in the deletion queue. $deleteQueue and $filesDeleted are references.
+				// Do not process queue here. Anything in the queuecan be handled during the next chunk.
+				
+				self::$_stateObj->save();
 				self::$_catalogObj->save();
-				pb_backupbuddy::status( 'details', 'Running out of time processing deletions. Took `' . ( microtime( true ) - $start_time ) . '` seconds.' );
 				return array( 'Processing deletions', array() ); //array( $startAt+$loopCount-$filesDeleted ) );
 			}
 			
 		} // end foreach.
+		
+		// Wrap up any lingering deletions.
+		pb_backupbuddy::status( 'details', 'Processing any lingering deletions in queue at finish then saving.' );
+		self::_process_internal_delete_queue( $destination_settings, $deleteQueue, $filesDeleted ); // Process any items in the deletion queue. $deleteQueue and $filesDeleted are references.
 		
 		// Save and finish.
 		self::$_stateObj->save();
@@ -1447,6 +1480,56 @@ class backupbuddy_live_periodic {
 		return true;
 		
 	} // End _step_process_deletions().
+	
+	
+	
+	/* _process_internal_delete_queue()
+	 *
+	 * API call to actually delete files queued for deletion. Updated catalog and stats variables.
+	 *
+	 */
+	private static function _process_internal_delete_queue( $destination_settings, &$deleteQueue, &$filesDeleted ) {
+		// Return true on empty queue.
+		if ( count( $deleteQueue ) <= 0 ) {
+			return true;
+		}
+		
+		pb_backupbuddy::status( 'details', 'Processing internal deletion queue on `' . count( $deleteQueue ) . '` files.' );
+		if ( true !== ( $delete_result = pb_backupbuddy_destination_live::deleteFiles( $destination_settings, $deleteQueue ) ) ) {
+			pb_backupbuddy::status( 'error', 'Error #8239833: Unable to delete remote file(s) `' . implode( '; ', $deleteQueue ) . '`' );
+			return false;
+		} elseif ( true === $delete_result ) {
+			
+			// Remove each deleted file from catalog and update stats.
+			foreach( $deleteQueue as $signatureFile ) {
+				// Remove file from catalog and update state stats. IMPORTANT: DO NOT SAVE CATALOG UNTIL QUEUE PROCESSED.
+				unset( self::$_catalog[ $signatureFile ] );
+			}
+			
+			// Calculate some local stats on what just happened for log.
+			$deleted_count = count( $deleteQueue );
+			$remaining = ( self::$_state['stats']['files_pending_delete'] - $deleted_count );
+			if ( $remaining < 0 ) {
+				$remaining = 0;
+			}
+			$last_deleted = end( $deleteQueue ); // Move array pointer to end of queue.
+			
+			// Update state stats.
+			self::$_state['stats']['files_pending_delete'] = self::$_state['stats']['files_pending_delete'] - $deleted_count;
+			if ( self::$_state['stats']['files_pending_delete'] < 0 ) {
+				self::$_state['stats']['files_pending_delete'] = 0;
+			}
+			
+			// Clear $deleteQueue reference.
+			$deleteQueue = array(); // Clear out queue.
+			
+			// Update $filesDeleted reference.
+			$filesDeleted += $deleted_count;
+			
+			pb_backupbuddy::status( 'details', 'Deleted `' . $deleted_count . '` remote files (' . $remaining . ' remain). Last file deleted in current queue: `' . $last_deleted . '`.' );
+			return true;
+		}
+	} // End _process_internal_delete_queue().
 	
 	
 	
@@ -1562,8 +1645,8 @@ class backupbuddy_live_periodic {
 				
 				// Run cleanup on send files.
 				require_once( pb_backupbuddy::plugin_path() . '/classes/housekeeping.php' );
-				backupbuddy_housekeeping::trim_remote_send_stats( $file_prefix = 'send-live_', $limit = $destination_settings['max_send_details_limit'] ); // Only keep last 5 send fileoptions.
-				backupbuddy_housekeeping::purge_logs( $file_prefix = 'status-remote_send-live_', $limit = $destination_settings['max_send_details_limit'] ); // Only keep last 5 send logs.
+				backupbuddy_housekeeping::trim_remote_send_stats( $file_prefix = 'send-live_', $limit = $destination_settings['max_send_details_limit'], '', $purge_log = true ); // Only keep last 5 send fileoptions.
+				// Moved into trim_remote_send_stats(). backupbuddy_housekeeping::purge_logs( $file_prefix = 'status-remote_send-live_', $limit = $destination_settings['max_send_details_limit'] ); // Only keep last 5 send logs.
 				
 				// Increment try count for transfer attempts and save.
 				$signatureDetails['t']++;
@@ -1663,9 +1746,10 @@ class backupbuddy_live_periodic {
 	 * 3) The next time the file signature checking step runs, any files that were thought to be backed up but found not to be (missing or old 'v' key) will be set to re-upload.
 	 *
 	 * @param	string	$marker		AWS file marker for the next loop (if applicable). null for no marker (start at beginning).
+	 * @param	int		$runningCount	How many files listed so far (excluding table count).
 	 *
 	 */
-	private static function _step_audit_remote_files( $marker = null ) {
+	private static function _step_audit_remote_files( $marker = null, $runningCount = 0 ) {
 		if ( ( time() - self::$_state['stats']['last_file_audit_finish'] ) < ( self::TIME_BETWEEN_FILE_AUDIT ) ) {
 			pb_backupbuddy::status( 'details', 'Not enough time has passed since last file audit. Skipping for now. Minimum time: `' . self::TIME_BETWEEN_FILE_AUDIT . '` secs. Last ran ago: `' . ( time() - self::$_state['stats']['last_file_audit_finish'] ) . '` secs.' );
 			return true;
@@ -1689,7 +1773,10 @@ class backupbuddy_live_periodic {
 		$destination_settings = self::get_destination_settings();
 		require_once( pb_backupbuddy::plugin_path() . '/destinations/live/init.php' );
 		
-		self::$_state['stats']['last_file_audit_start'] = microtime( true ); // Audit start time.
+		if ( null == $marker ) { // Only reset if NOT chunking (first pass). Was cause of a bug first few weeks of release resulting in process restarting after hitting 100% if audit step chunked.
+			self::$_state['stats']['last_file_audit_start'] = microtime( true ); // Audit start time.
+		}
+		
 		self::$_stateObj->save();
 		
 		$loopCount = 0;
@@ -1799,6 +1886,10 @@ class backupbuddy_live_periodic {
 				$last_save = microtime( true );
 			}
 			
+			$filesListedMinusSkips = ( $totalListed - $serialSkips );
+			$total_files = ( $filesListedMinusSkips - $filesDeleted );
+			$totalTablesMinusSkips = ( $totalTables - $serialSkips );
+			
 			// If files retrieves is >= to the list limit then there may be more files. Set marker and chunk.
 			if ( count( $files ) < $destination_settings['max_filelist_keys'] ) { // No more files remain.
 				$keepLooping = false;
@@ -1806,20 +1897,19 @@ class backupbuddy_live_periodic {
 				self::$_catalogObj->save();
 				self::$_state['stats']['last_file_audit_finish'] = microtime( true ); // Audit finish time.
 				
-				$filesListedMinusSkips = ( $totalListed - $serialSkips );
-				$total_files = ( $filesListedMinusSkips - $filesDeleted );
-				$totalTablesMinusSkips = ( $totalTables - $serialSkips );
-				pb_backupbuddy::status( 'details', 'No more files to check. Deleted `' . $filesDeleted . '` out of listed `' . $totalListed . '` (`' . $filesListedMinusSkips . '` files, Deleted `' . $tablesDeleted . '` tables out of `' . $totalTablesMinusSkips . '` total tables. `' . $serialSkips . '` skipped database/serial dir). `' . $total_files .'` files after deletions.' );
+				$runningCount += $total_files - $totalTablesMinusSkips;
 				
-				if ( $total_files < self::$_state['stats']['files_total_count'] ) {
-					$message = 'Attention! Remote storage lists fewer files (' . $total_files . ') than expected (' . self::$_state['stats']['files_total_count'] . '). More files may be pending transfer.';
+				pb_backupbuddy::status( 'details', 'No more files to check. Deleted `' . $filesDeleted . '` out of listed `' . $totalListed . '` (`' . $filesListedMinusSkips . '` files, Deleted `' . $tablesDeleted . '` tables out of `' . $totalTablesMinusSkips . '` total tables. `' . $serialSkips . '` skipped database/serial dir). `' . $total_files .'` files+tables.sql files after deletions. Files running count: `' . $runningCount . '`.' );
+				
+				if ( $runningCount < self::$_state['stats']['files_total_count'] ) {
+					$message = 'Attention! Remote storage lists fewer files (' . $runningCount . ') than expected (' . self::$_state['stats']['files_total_count'] . '). More files may be pending transfer. Deleted: `' . $filesDeletedThisRound . '`.';
 					pb_backupbuddy::status( 'error', $message );
 					backupbuddy_core::addNotification( 'live_error', 'BackupBuddy Stash Live Error', $message );
 				}
 				
 				return true;
 			} else { // More files MAY remain.
-				pb_backupbuddy::status( 'details', 'More files remain to check. Deleted `' . $filesDeleted . '` total files this round so far.' );
+				pb_backupbuddy::status( 'details', 'More files remain to check. Deleted `' . $filesDeleted . '` total files this round so far. Files running count: `' . ( $runningCount + $total_files - $totalTablesMinusSkips ) . '`.' );
 				
 				$marker = end( $files );
 				$marker = $marker['Key'];
@@ -1829,16 +1919,16 @@ class backupbuddy_live_periodic {
 				$time_elapsed = ( microtime( true ) - pb_backupbuddy::$start_time );
 				$time_remaining = $destination_settings['max_time'] - ( $time_elapsed + self::TIME_WIGGLE_ROOM ); // Estimated time remaining before PHP times out. Unit: seconds.
 				$averageTimePerLoop = ( microtime( true ) - $loopStart ) / $loopCount;
+				pb_backupbuddy::status( 'details', 'Time elapsed: `' . $time_elapsed . '`, estimated remaining: `' . $time_remaining . '`, average time needed per loop: `' . $averageTimePerLoop . '`. Max time setting: `' . $destination_settings['max_time'] . '`.' );
 				if ( $averageTimePerLoop >= $time_remaining ) { // Not enough time for another loop. Chunk.
 					$keepLooping = false;
-					
 					self::$_catalogObj->save();
 					
-					$filesListedMinusSkips = ( $totalListed - $serialSkips );
-					$totalTablesMinusSkips = ( $totalTables - $serialSkips );
-					pb_backupbuddy::status( 'details', 'Running out of time processing file audit. Took `' . ( microtime( true ) - $loopStart ) . '` seconds to delete `' . $filesDeleted . '` out of listed `' . $totalListed . '` (`' . $filesListedMinusSkips . '` files, Deleted `' . $tablesDeleted . '` tables out of `' . $totalTablesMinusSkips . '` total tables. `' . $serialSkips . '` skipped database/serial dir). `' . ( $filesListedMinusSkips - $filesDeleted ) .'` files after deletions. Starting next at `' . $marker . '`.' );
+					$runningCount += $total_files - $totalTablesMinusSkips;
 					
-					return array( 'Auditing remote files', array( $marker ) );
+					pb_backupbuddy::status( 'details', 'Running out of time processing file audit. Took `' . ( microtime( true ) - $loopStart ) . '` seconds to delete `' . $filesDeleted . '` out of listed `' . $totalListed . '` (`' . $filesListedMinusSkips . '` files, Deleted `' . $tablesDeleted . '` tables out of `' . $totalTablesMinusSkips . '` total tables. `' . $serialSkips . '` skipped database/serial dir). `' . ( $filesListedMinusSkips - $filesDeleted ) .'` files after deletions. Starting next at `' . $marker . '`.  Files running count: `' . $runningCount . '`.' );
+					
+					return array( 'Auditing remote files', array( $marker, $runningCount ) );
 				} else {
 					// Proceed looping in this PHP page load...
 					$keepLooping = true;
@@ -1851,6 +1941,15 @@ class backupbuddy_live_periodic {
 		// Made it here so we finished.
 		self::$_catalogObj->save();
 		self::$_state['stats']['last_file_audit_finish'] = microtime( true ); // Audit finish time.
+		
+		// If not all files have uploaded, skip snapshot for now.
+		if ( ( self::$_state['stats']['files_pending_send'] > 0 ) || ( self::$_state['stats']['tables_pending_send'] > 0 ) ) {
+			pb_backupbuddy::status( 'details', '`' . self::$_state['stats']['files_pending_send'] . '` files and `' . self::$_state['stats']['tables_pending_send'] . '` database tables are still pending transfer. Waiting for transfers to finish before creating Snapshot.' );
+			self::$_state['stats']['wait_on_transfers_start'] = microtime( true );
+			backupbuddy_live::queue_step( $step = 'wait_on_transfers', $args = array(), $skip_run_now = true );
+			return true;
+		}
+		
 		return true;
 		
 	} // End _step_audit_remote_files().
@@ -1863,7 +1962,7 @@ class backupbuddy_live_periodic {
 	 *
 	 */
 	public static function get_destination_settings() {
-		
+		require_once( pb_backupbuddy::plugin_path() . '/classes/core.php' );
 		require_once( pb_backupbuddy::plugin_path() . '/destinations/live/init.php' );
 		$settings = pb_backupbuddy_destination_live::_formatSettings( pb_backupbuddy::$options['remote_destinations'][ backupbuddy_live::getLiveID() ] );
 		
@@ -1936,7 +2035,7 @@ class backupbuddy_live_periodic {
 		require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
 		$stateObj = new pb_backupbuddy_fileoptions( backupbuddy_core::getLogDirectory() . 'live/state-' . pb_backupbuddy::$options['log_serial'] . '.txt', $read_only, $ignore_lock, $create_file = true );
 		if ( true !== ( $result = $stateObj->is_ok() ) ) {
-			pb_backupbuddy::status( 'error', 'Error #3297392. Fatal error. Unable to create or access fileoptions file. Details: `' . $result . '`. Waiting a moment before ending. Read only: `' . $read_only . '`, ignore lock: `' . $ignore_lock . '`, contents only: `' . $get_contents_only . '`.' );
+			pb_backupbuddy::status( 'error', 'Error #3297392. Fatal error. Unable to create or access SERIAL fileoptions file. Details: `' . $result . '`. Waiting a moment before ending. Read only: `' . $read_only . '`, ignore lock: `' . $ignore_lock . '`, contents only: `' . $get_contents_only . '`. Caller: `' . backupbuddy_core::getCallingFunctionName() . '`.' );
 			sleep( 3 ); // Wait a moment to give time for temporary issues to resolve.
 			return false;
 		}
@@ -1995,7 +2094,7 @@ class backupbuddy_live_periodic {
 		require_once( pb_backupbuddy::plugin_path() . '/classes/fileoptions.php' );
 		$catalogObj = new pb_backupbuddy_fileoptions( backupbuddy_core::getLogDirectory() . 'live/catalog-' . pb_backupbuddy::$options['log_serial'] . '.txt', $read_only, $ignore_lock, $create_file = true, $live_mode = true );
 		if ( true !== ( $result = $catalogObj->is_ok() ) ) {
-			pb_backupbuddy::status( 'error', 'Error #239239034. Unable to create or access fileoptions file. Details: `' . $result . '`. Waiting a moment before ending.' );
+			pb_backupbuddy::status( 'error', 'Error #239239034. Fatal error. Unable to create or access CATALOG fileoptions file. Details: `' . $result . '`. Waiting a moment before ending. Read only: `' . $read_only . '`, ignore lock: `' . $ignore_lock . '`, contents only: `' . $get_contents_only . '`. Caller: `' . backupbuddy_core::getCallingFunctionName() . '`.' );
 			sleep( 3 ); // Wait a moment to give time for temporary issues to resolve.
 			return false;
 		}
@@ -2255,6 +2354,12 @@ class backupbuddy_live_periodic {
 			return true;
 		}
 		
+		if ( ( 0 == self::$_state['stats']['files_total_count'] ) || ( 0 == self::$_state['stats']['tables_total_count'] ) ) {
+			$error = 'Error #3489349834: Made it to the snapshot stage but there are zero files and/or tables. Halting to protect backup integrity. Files: `' . self::$_state['stats']['files_total_count'] . '`. Tables: `' . self::$_state['stats']['tables_total_count'] . '`.';
+			backupbuddy_core::addNotification( 'live_error', 'BackupBuddy Stash Live Error', $error );
+			return $error;
+		}
+		
 		if ( false !== self::$_state['stats']['manual_snapshot'] ) {
 			pb_backupbuddy::status( 'details', 'Manual snapshot requested at `' . pb_backupbuddy::$format->date( pb_backupbuddy::$format->localize_time( self::$_state['stats']['manual_snapshot'] ) ) . '` (' . pb_backupbuddy::$format->time_ago( self::$_state['stats']['manual_snapshot'] ) . ' ago). Triggering remote snapshot now.' );
 			$trigger = 'manual';
@@ -2294,7 +2399,7 @@ class backupbuddy_live_periodic {
 				backupbuddy_live_periodic::update_last_remote_snapshot_time( $snapshot_id );
 				pb_backupbuddy::status( 'details', 'Triggered new remote snapshot with ID `' . $snapshot_id . '`.' );
 				
-				
+				// TODO: Keeping in place until new tmtrim-settings and passing tmtrim data with snapshot trigger is verified. Deprecating as of 7.0.5.5.
 				// Schedule to run trim cleanup.
 				$cronArgs = array();
 				$schedule_result = backupbuddy_core::schedule_single_event( time() + ( 60*60 ), 'live_after_snapshot', $cronArgs ); // 1hr
@@ -2340,6 +2445,10 @@ class backupbuddy_live_periodic {
 	 */
 	public static function _run_remote_snapshot( $trigger = 'unknown' ) {
 		
+		if ( false === self::_load_state() ) {
+			return false;
+		}
+		
 		$destination_settings = backupbuddy_live_periodic::get_destination_settings();
 		
 		// Send email notification?
@@ -2347,9 +2456,11 @@ class backupbuddy_live_periodic {
 			if ( '' != $destination_settings['email'] ) {
 				$email = $destination_settings['email'];
 			} else {
+				pb_backupbuddy::status( 'details', 'Snapshot set to send email notification to account. Send notification?: `' . $destination_settings['send_snapshot_notification'] . '`. First completion: `' . self::$_state['stats']['first_completion'] . '`.' );
 				$email = 'account';
 			}
 		} else {
+			pb_backupbuddy::status( 'details', 'Snapshot set not to send email notification.' );
 			$email = 'none';
 		}
 		
@@ -2357,6 +2468,7 @@ class backupbuddy_live_periodic {
 			'ibpass' => '', // Gets set below.
 			'email' => $email, // Valid options: email@address.com, 'none', 'account'
 			'stash_copy' => true,
+			'trim' => backupbuddy_live::get_archive_limit_settings_array( false ),
 			//'debug' => true,
 		);
 		if ( '' != pb_backupbuddy::$options['importbuddy_pass_hash'] ) {
@@ -2377,6 +2489,8 @@ class backupbuddy_live_periodic {
 		if ( pb_backupbuddy::$options['log_level'] == '3' ) { // Full logging enabled.
 			pb_backupbuddy::status( 'details', 'live-snapshot response due to logging level: `' . print_r( $response, true ) . '`. Call params: `' . print_r( $additionalParams, true ) . ' `.' );
 		}
+		
+		do_action( 'backupbuddy_run_remote_snapshot_response', $response );
 		
 		return $response;
 		

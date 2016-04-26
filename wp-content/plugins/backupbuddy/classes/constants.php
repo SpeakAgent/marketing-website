@@ -5,9 +5,9 @@ class backupbuddy_constants {
 	const NOTIFICATIONS_OPTION_SLUG =  'pb_backupbuddy_notifications'; // option name to store notifications into site options system.
 	const NOTIFICATIONS_MAX_COUNT = 25; // Only keep the most recent notifications, up to this limit. Prevent too many building up.
 	const SCHEDULE_RETRY_WAIT = 1; // Seconds to wait to retry scheduling with WordPress if WordPress reports failure.
+	const PHP_MEMORY_RETEST_DELAY = 15; // Minimum amount of seconds which must have elapsed since the file modified time was updated to begin a retest. Prevents accidental overwrite of in-progress test.
 	const PHP_RUNTIME_RETEST_DELAY = 15; // Minimum amount of seconds which must have elapsed since the file modified time was updated to begin a retest. Prevents accidental overwrite of in-progress test.
 	const PHP_RUNTIME_TEST_MAX_TIME = 300; // Maximum number of seconds (loops with 1sec sleeps) to run PHP runtime test for. For huge runtimes prevents from running for full duration.
-	const PHP_RUNTIME_TEST_MINIMUM_INTERVAL = 604800; // How often to perform the automated test via the housekeeping function. This must elapse before automated test will run.
 	const MINIMUM_CRON_KICK_INTERVAL = 600; // [10min] Minimum number of seconds between cron-kick calls to Stash API.
 	const MIMIMUM_TIME_BETWEEN_ERROR_EMAILS = 60; // [1min] Minimum number of seconds between any error emails being sent, to prevent floods.
 	

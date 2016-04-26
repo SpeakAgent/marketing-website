@@ -40,8 +40,28 @@ jQuery(document).ready(function() {
 				}
 			);
 		}, 5000 );
+	});
+	
+	jQuery( '.pb_backupbuddy_testPHPMemory' ).click( function(e){
+		loading = jQuery(this).children( '.pb_backupbuddy_loading' );
+		serializedForm = jQuery(this).closest( 'form' ).serialize();
 		
-		
+		testPHPMemoryInterval = setInterval( function(){
+			loading.show();
+			jQuery.post(
+				'<?php echo pb_backupbuddy::ajax_url( 'run_php_memory_test_results' ); ?>',
+				serializedForm, 
+				function(data) {
+					loading.hide();
+					if ( bb_isNumber( data ) ) { // Finished
+						result_obj.html( data + ' <?php _e( "MB", "it-l10n-backupbuddy" ); ?>' );
+						clearInterval( testPHPMemoryInterval );
+					} else { // In progress.
+						result_obj.html( data );
+					}
+				}
+			);
+		}, 5000 );
 	});
 	
 	jQuery('.pb_backupbuddy_refresh_stats').click(function(e) {

@@ -4,6 +4,9 @@
 if ( ! isset( $cron ) ) {
 	$cron = get_option('cron');
 }
+if ( ! isset( $cron_warnings ) ) {
+	$cron_warnings = array();
+}
 
 // Loop through each cron time to create $crons array for displaying later.
 $crons = array();
@@ -69,10 +72,18 @@ foreach ( (array) $cron as $time => $cron_item ) {
 					$arguments = __('none', 'it-l10n-backupbuddy' );
 				}
 				
+				// If run time is in the past, note this.
+				$past_time = '';
+				if ( $time < time() ) {
+					$warning = 'WARNING: ' . __( 'Next run time has passed. It should have already run. Cron problem?', 'it-l10n-backupbuddy' );
+					$past_time = '<br><span style="color: red;"> ** ' . $warning . ' ** ' . pb_backupbuddy::$ui->tip( 'Something may be wrong with your WordPress cron such as a malfunctioning caching plugin or webhost problems.', '', false ) . '</span>';
+					$cron_warnings[] = $warning;
+				}
+				
 				// Populate crons array for displaying later.
 				$crons[ $time . '|' . $hook_name . '|' . $item_name] = array(
 					'<span title=\'Key: ' . $item_name . '\'>' . $hook_name . '</span>',
-					pb_backupbuddy::$format->date( pb_backupbuddy::$format->localize_time( $time ) ) . '<br><span class="description">Timestamp: ' . $time . '</span>',
+					pb_backupbuddy::$format->date( pb_backupbuddy::$format->localize_time( $time ) ) . '<br><span class="description"> Timestamp: ' . $time . '</span>' . $past_time,
 					$period,
 					$interval,
 					$arguments,

@@ -121,6 +121,7 @@ class pb_backupbuddy_destination_s32 { // Change class name end to match destina
 			if ( 's3' == $s3Config['region'] ) {
 				$s3Config['region'] = 'us-east-1';
 			}
+			$s3Config['version'] = '2006-03-01'; // Some regions now requiring this.
 			
 			// Cannot use this since we STILL need to know the correct region so that v4 signature signing can occur. Catch-22.
 			//$s3Config['endpoint'] = 'https://' . $settings['bucket'] . '.s3.amazonaws.com';
@@ -256,7 +257,7 @@ class pb_backupbuddy_destination_s32 { // Change class name end to match destina
 			
 			//pb_backupbuddy::status( 'details', 'Multipart settings to pass:' . print_r( $multipart_destination_settings, true ) );
 			//$multipart_destination_settings['_multipart_status'] = 'Starting send of ' . count( $multipart_destination_settings['_multipart_counts'] ) . ' parts.';
-			pb_backupbuddy::status( 'details', 'Multipart initiated; passing over to send first chunk this run.' );
+			pb_backupbuddy::status( 'details', 'Multipart initiated; passing over to send first chunk this run. Burst size: `' . $settings['max_burst'] . ' MB`.' );
 			$settings = $multipart_destination_settings; // Copy over settings.
 			unset( $multipart_destination_settings );
 		} // end initiating multipart.
@@ -389,15 +390,16 @@ class pb_backupbuddy_destination_s32 { // Change class name end to match destina
 					$update_status = 'Sent part ' . $settings['_multipart_partnumber'] . ' of ' . count( $settings['_multipart_counts'] ) . ' parts.';
 					
 					pb_backupbuddy::status( 'details', 'Getting etags and notifying of multipart upload completion.' );
+					$multipartOptions = array(
+						'Bucket' => $settings['bucket'],
+						'UploadId' => $settings['_multipart_id'],
+						'Key' => $settings['_multipart_remotefile'],
+						'Parts' => $settings['_multipart_etag_parts']
+					);
 					try {
-						$response = self::$_client->completeMultipartUpload( array(
-							'Bucket' => $settings['bucket'],
-							'UploadId' => $settings['_multipart_id'],
-							'Key' => $settings['_multipart_remotefile'],
-							'Parts' => $settings['_multipart_etag_parts']
-						) );
+						$response = self::$_client->completeMultipartUpload( $multipartOptions );
 					} Catch( Exception $e ) {
-						return self::_error( 'Unable to notify server of completion of all parts for multipart upload `' . $settings['_multipart_id'] . '`. Details: `' . $e->getMessage() . '`.' );
+						return self::_error( 'Error #84397347437: Unable to notify server of completion of all parts for multipart upload `' . $settings['_multipart_id'] . '`. Parts count: `' . count( $settings['_multipart_counts'] ) . '`. Details: `' . $e->getMessage() . '`. Multipart options: `' . print_r( $multipartOptions, true ) . '`.' );
 					}
 					pb_backupbuddy::status( 'details', 'Server notified of multipart completion.' );
 					
@@ -873,9 +875,9 @@ class pb_backupbuddy_destination_s32 { // Change class name end to match destina
 		pb_backupbuddy::status( 'details', 'Downloading remote file `' . $remoteFile . '` from S3 to local file `' . $localDestinationFile . '`.' );
 		
 		try {
-			$response = self::$_client->get_object( array(
+			$response = self::$_client->getObject( array(
 				'Bucket' => $settings['bucket'],
-				'Key' => $remotePath . $remoteFile,
+				'Key' => $settings['directory'] . $remoteFile,
 				'SaveAs' => $localDestinationFile
 			) );
 		} Catch( Exception $e ) {

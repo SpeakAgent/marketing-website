@@ -53,7 +53,7 @@ if ( 'settings' == pb_backupbuddy::_POST( 'pb_backupbuddy_' ) ) {
 
 
 $archive_limits_html = '<tr class="">
-	<th scope="row" class="" style="">' . __( 'Backup Archive Limits', 'it-l10n-backupbuddy' ) . pb_backupbuddy::tip( 'Leave empty for unlimited backups of a type or 0 (zero) to limit to none. WARNING: Use caution when entering 0 (zero) for a type of backup as it could result in the loss of many backups.', '', $echo_tip = false ) . '</th>
+	<th scope="row" class="" style="">' . __( 'Snapshot Archive Limits', 'it-l10n-backupbuddy' ) . pb_backupbuddy::tip( 'Leave empty for unlimited backups of a type or 0 (zero) to limit to none. WARNING: Use caution when entering 0 (zero) for a type of backup as it could result in the loss of many backups.', '', $echo_tip = false ) . '</th>
 	<td class="" style="padding: 0;">
 
 		<table>
@@ -260,6 +260,16 @@ $settings_form->add_setting( array(
 	'rules'		=>		'required|int[5-9999999]',
 	'css'		=>		'width: 50px;',
 	'after'		=>		' MB',
+	'row_class'	=>		'advanced-toggle',
+) );
+$settings_form->add_setting( array(
+	'type'		=>		'text',
+	'name'		=>		'max_delete_burst',
+	'title'		=>		__( 'Delete per burst', 'it-l10n-backupbuddy' ),
+	'tip'		=>		__( '[Example: 100] - This is the maximum number of files which can be deleted per API call at a time. This helps reduce outgoing connections and improve performance.', 'it-l10n-backupbuddy' ),
+	'rules'		=>		'required|int[5-9999999]',
+	'css'		=>		'width: 50px;',
+	'after'		=>		' files',
 	'row_class'	=>		'advanced-toggle',
 ) );
 $settings_form->add_setting( array(

@@ -995,6 +995,11 @@ if ( 'deploy' == pb_backupbuddy::_GET( 'backupbuddy_backup' ) ) {
 							continue;
 						}
 						
+						// Hide these destinations from list to add here.
+						if ( ( 'live' == $destination_name ) || ( 'site' == $destination_name ) ) {
+							continue;
+						}
+						
 						$thisDest = '';
 						$thisDest .= '<li class="bb_destination-item bb_destination-' . $destination_name . ' bb_destination-new-item ' . $disableClass . '">';
 						if ( 'stash2' == $destination_name ) {

@@ -27,6 +27,7 @@ Thumbs.db
 ###########################
 wp-config.php
 .htaccess
+.cache/
 
 # Compass/SASS related files #
 ##############################
