@@ -39,7 +39,7 @@ This repo is currently only for essential elements for the WordPress powered web
 
 # Get up and running!
 
-# To get up a clean install running locally
+## To get up a clean install running locally
 
 1. You need use a program such as MAMP PRO (https://www.mamp.info/en/mamp-pro/) or another system that lets you run Apache locally.
 2. Download WordPress Core from http://www.wordpress.org and go through the setup process.
@@ -48,7 +48,7 @@ This repo is currently only for essential elements for the WordPress powered web
 5. Download the Speak Agent theme from this very repo! (Download the repo as a zip and then upload it via WordPress' Customizer).
 6. Have fun WordPressing!
 
-# To get an exact copy of the live site running locally
+## To get an exact copy of the live site running locally
 
 1. Remove everything within your existing local WordPress folder.
 2. Drop all tables and rows from your local WordPress database.
@@ -59,3 +59,8 @@ This repo is currently only for essential elements for the WordPress powered web
 7. Download importbuddy.php into your empty local WordPress folder.
 8. Navigate to your local URL/importbuddy (i.e. speakagent:8888/importbuddy) and do what it says.
 9. Have fun WordPressing!
+
+# Maintenance Guidance
+
+1. Every two weeks the site should be checked for new versions of plugins and WordPress so that the site stays up to date and secure.
+2. Every two weeks you can make a backup of the site via BackupBuddy. Be sure you have at least 4 backups in storage at anytime.
